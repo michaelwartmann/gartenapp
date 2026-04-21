@@ -30,7 +30,7 @@ export default async function Home() {
           {plants.map((plant) => (
             <Link key={plant.id} href={`/plants/${plant.id}`} className="block">
               <div 
-                className="bg-white rounded-xl border overflow-hidden transition-all duration-200 hover:shadow-sm active:scale-95 min-h-[200px] touch-none"
+                className="bg-white rounded-xl border overflow-hidden transition-all duration-200 hover:shadow-sm active:scale-95 min-h-[200px]"
                 style={{ borderColor: '#E8E6DF' }}
               >
                 <div className="aspect-square relative">

@@ -40,47 +40,71 @@ export default function PlantDetailPage({ params }: { params: Promise<{ id: stri
   const [editingField, setEditingField] = useState<string | null>(null)
   const [editValue, setEditValue] = useState('')
   const [kimGardenId, setKimGardenId] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const router = useRouter()
-  const { id } = use(params)
+  const resolvedParams = use(params)
+  const { id } = resolvedParams
 
   useEffect(() => {
     async function loadPlantData() {
-      // Get plant data
-      const { data: plantData } = await supabase
-        .from('plants')
-        .select('*')
-        .eq('id', id)
-        .single()
+      try {
+        setLoading(true)
+        setError(null)
 
-      if (plantData) {
-        setPlant(plantData)
-      }
-
-      // Get Kim's garden ID
-      const { data: kimGarden } = await supabase
-        .from('gardens')
-        .select('id')
-        .eq('owner_name', 'Kim')
-        .single()
-
-      if (kimGarden) {
-        setKimGardenId(kimGarden.id)
-
-        // Check if Kim has custom data for this plant
-        const { data: gardenPlantData } = await supabase
-          .from('garden_plants')
+        // Get plant data
+        const { data: plantData, error: plantError } = await supabase
+          .from('plants')
           .select('*')
-          .eq('garden_id', kimGarden.id)
-          .eq('plant_id', id)
+          .eq('id', id)
           .single()
 
-        if (gardenPlantData) {
-          setGardenPlant(gardenPlantData)
+        if (plantError) {
+          throw new Error(`Plant not found: ${plantError.message}`)
         }
+
+        if (plantData) {
+          setPlant(plantData)
+        }
+
+        // Get Kim's garden ID
+        const { data: kimGarden, error: gardenError } = await supabase
+          .from('gardens')
+          .select('id')
+          .eq('owner_name', 'Kim')
+          .single()
+
+        if (gardenError) {
+          console.warn('Kim garden not found:', gardenError.message)
+          return
+        }
+
+        if (kimGarden) {
+          setKimGardenId(kimGarden.id)
+
+          // Check if Kim has custom data for this plant
+          const { data: gardenPlantData } = await supabase
+            .from('garden_plants')
+            .select('*')
+            .eq('garden_id', kimGarden.id)
+            .eq('plant_id', id)
+            .single()
+
+          if (gardenPlantData) {
+            setGardenPlant(gardenPlantData)
+          }
+        }
+      } catch (err) {
+        console.error('Error loading plant data:', err)
+        setError(err instanceof Error ? err.message : 'Failed to load plant data')
+      } finally {
+        setLoading(false)
       }
     }
 
-    loadPlantData()
+    if (id) {
+      loadPlantData()
+    }
   }, [id])
 
   const handleFieldClick = (field: string, currentValue: string) => {
@@ -141,8 +165,58 @@ export default function PlantDetailPage({ params }: { params: Promise<{ id: stri
     return ''
   }
 
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#FAFAF7' }}>
+        <div className="text-center">
+          <div className="text-2xl mb-2">🌱</div>
+          <p style={{ color: '#888780' }}>Lädt...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-4" style={{ backgroundColor: '#FAFAF7' }}>
+        <div className="text-center max-w-md">
+          <div className="text-2xl mb-4">😕</div>
+          <h2 className="text-lg font-medium mb-2" style={{ color: '#2C2C2A' }}>
+            Fehler beim Laden
+          </h2>
+          <p className="text-sm mb-4" style={{ color: '#888780' }}>
+            {error}
+          </p>
+          <button
+            onClick={() => router.back()}
+            className="px-6 py-3 rounded-xl text-white font-medium"
+            style={{ backgroundColor: '#4A7C59' }}
+          >
+            Zurück
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   if (!plant) {
-    return <div>Lädt...</div>
+    return (
+      <div className="min-h-screen flex items-center justify-center px-4" style={{ backgroundColor: '#FAFAF7' }}>
+        <div className="text-center max-w-md">
+          <div className="text-2xl mb-4">🤷‍♀️</div>
+          <h2 className="text-lg font-medium mb-2" style={{ color: '#2C2C2A' }}>
+            Pflanze nicht gefunden
+          </h2>
+          <button
+            onClick={() => router.back()}
+            className="px-6 py-3 rounded-xl text-white font-medium"
+            style={{ backgroundColor: '#4A7C59' }}
+          >
+            Zurück
+          </button>
+        </div>
+      </div>
+    )
   }
 
   return (
