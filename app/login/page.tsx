@@ -13,8 +13,9 @@ export default function LoginPage() {
     e.preventDefault()
     
     if (password === 'Garten2026') {
-      // Set auth cookie
-      document.cookie = 'garten_auth=true; path=/'
+      // Set persistent auth cookie (1 year). Survives browser restart so
+      // mobile users don't have to re-enter the password during garden trips.
+      document.cookie = 'garten_auth=true; path=/; max-age=31536000; SameSite=Lax; Secure'
       router.push('/')
     } else {
       setError(true)

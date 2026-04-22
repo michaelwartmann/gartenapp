@@ -15,6 +15,19 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "🌱 Gartenapp",
   description: "Shared plant and seed tracker",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    title: "Garten",
+    statusBarStyle: "default",
+  },
+  icons: {
+    icon: [
+      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: "/apple-touch-icon.png",
+  },
 };
 
 export const viewport = {
@@ -22,6 +35,7 @@ export const viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
+  themeColor: '#4A7C59',
 };
 
 export default function RootLayout({
