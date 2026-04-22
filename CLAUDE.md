@@ -76,18 +76,6 @@ Sorte, Saatzeit, Saattiefe, Nachbarn, Erde, Witterung, Bodenmilieu, Dünger, Vor
 
 ## 🛠️ Scripts & Tools
 
-### Image Management
-```bash
-# Fix broken Unsplash image URLs
-# Run SQL from scripts/fix-images.sql in Supabase SQL editor
-
-# Generate kawaii illustrations for all plants
-npm run generate-images
-
-# Generate for specific plants (handles German characters)
-npm run generate-images Kürbis Möhre
-```
-
 ### Environment Variables
 ```bash
 # .env.local (configured locally)
@@ -99,15 +87,20 @@ GOOGLE_AI_API_KEY=[your_google_ai_key]
 
 ## 🚀 Deployment
 
-### Current Access
-- **Local Dev**: `http://localhost:3001`
+### Live
+- **Production**: `https://gartenapp-git-main-mikeio.vercel.app`
+- **Release**: v1.0 (demo release — frozen as git tag `v1.0`)
+- **Custom domain**: `garten.philia-aletheia.art` (planned)
+
+### Local
+- **Dev server**: `http://localhost:3001` (or `:3000`)
 - **Network**: `http://192.168.1.100:3001` (mobile testing)
 
 ### Repository
 - **GitHub**: `https://github.com/michaelwartmann/gartenapp.git`
-- **Vercel URL**: *To be deployed*
 
-### Vercel Environment Variables Needed
+### Vercel Environment Variables
+All four vars from `.env.example` must be set in the Vercel project:
 ```
 NEXT_PUBLIC_SUPABASE_URL
 NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -143,30 +136,16 @@ GOOGLE_AI_API_KEY
 6. **Filename Sanitization**: Handle German special characters for file uploads
 7. **Single Page App**: Simple navigation for all gardening enthusiasts
 
-## ❗ Current Issues
+## 🎯 v2 Roadmap
 
-### Image Problems (Known)
-- Some Unsplash URLs return 404 errors
-- **Solution**: Run `scripts/fix-images.sql` in Supabase SQL editor
+Features to build on top of v1.0 (prioritize one per plan):
 
-### Placeholder Images
-- Currently using SVG placeholders for kawaii images  
-- **Future**: Replace with actual AI-generated images when Google's API supports it
-
-## 🎯 Next Steps
-
-### Immediate (MVP)
-1. **Deploy to Vercel** with environment variables
-2. **Fix image URLs** using scripts/fix-images.sql
-3. **Test on mobile devices** via Vercel URL
-4. **Point domain** garten.philia-aletheia.art to Vercel
-
-### Future Enhancements  
-1. **30+ plants** with complete botanical data
-2. **Filter/sort** by any of the 16 dimensions
-3. **Per-user gardens** with individual customization
-4. **Real AI images** when Google's generation API is ready
-5. **Enhanced mobile UI** polish and animations
+1. **On-demand kawaii image generation** — when a user adds a new plant, auto-generate the illustration via Google Imagen/Gemini API and upload to Supabase Storage. Reuses the existing `@google/generative-ai` dep.
+2. **30+ plants** with complete botanical data (currently 8).
+3. **Filter/sort** by any of the 16 botanical dimensions.
+4. **Per-user gardens** — move beyond the single shared password to individual accounts.
+5. **Custom domain** — point `garten.philia-aletheia.art` at Vercel.
+6. **Enhanced mobile UI** — polish and animations.
 
 ## 📝 Development Notes
 
