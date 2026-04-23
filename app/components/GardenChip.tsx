@@ -20,8 +20,9 @@ export default function GardenChip() {
 
   return (
     <div
-      className="fixed top-4 right-4 z-10 px-3 py-1 rounded-full text-xs font-medium pointer-events-none"
+      className="fixed right-4 z-10 px-3 py-1 rounded-full text-xs font-medium pointer-events-none shadow-sm"
       style={{
+        bottom: 'max(1rem, env(safe-area-inset-bottom))',
         backgroundColor: '#FFFFFF',
         color: '#888780',
         border: '1px solid #E8E6DF',
