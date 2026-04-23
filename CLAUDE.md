@@ -77,9 +77,13 @@ Sorte, Saatzeit, Saattiefe, Nachbarn, Erde, Witterung, Bodenmilieu, Dünger, Vor
 # Seed/refresh the plants table from data/plants.json (idempotent upsert)
 npm run seed-plants
 
-# Backfill kawaii images for any plant that has no illustration_url
-# Uses Google Imagen 3 via the GOOGLE_AI_API_KEY. ~$0.04/image at standard pricing.
+# Backfill kawaii images for any plant that has no illustration_url.
+# Default model: gemini-2.5-flash-image (free-tier friendly).
+# Override with IMAGE_MODEL env var if needed (e.g. imagen-3.0-generate-002 if you have paid Imagen access).
 npm run generate-images
+
+# See which image-gen models your API key actually has access to
+npm run generate-images -- --list-models
 
 # Regenerate all images (e.g. for a style refresh) — overwrites existing
 npm run generate-images -- --all

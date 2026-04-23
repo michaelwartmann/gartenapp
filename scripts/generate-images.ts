@@ -14,12 +14,16 @@ if (!SUPABASE_URL || !SUPABASE_SECRET || !GOOGLE_AI_KEY) {
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SECRET)
 
-// Imagen 3 endpoint via Google AI Studio. Free-tier limits apply; ~$0.04/image
-// at standard pricing. Override the model name with IMAGEN_MODEL env var if a
-// newer one becomes available (e.g. imagen-4.0-generate-001).
-const IMAGEN_MODEL = process.env.IMAGEN_MODEL || 'imagen-3.0-generate-002'
-const IMAGEN_URL =
-  `https://generativelanguage.googleapis.com/v1beta/models/${IMAGEN_MODEL}:predict?key=${GOOGLE_AI_KEY}`
+// Default to Gemini image generation since it's available on the free tier of
+// Google AI Studio. Imagen 3 requires billing enabled on the underlying GCP
+// project. Override with IMAGE_MODEL env var to use a different model.
+//   - For Gemini-style image gen, set to e.g. "gemini-2.5-flash-image" or
+//     "gemini-2.0-flash-preview-image-generation"
+//   - For Imagen (paid tier), set to "imagen-3.0-generate-002" or
+//     "imagen-4.0-generate-001"
+const IMAGE_MODEL = process.env.IMAGE_MODEL || 'gemini-2.5-flash-image'
+
+const API_BASE = 'https://generativelanguage.googleapis.com/v1beta'
 
 type PlantInput = {
   id: string
@@ -30,14 +34,12 @@ type PlantInput = {
 }
 
 function buildPrompt(plant: PlantInput): string {
-  // Style anchored to a consistent kawaii watercolor look. Avoids text on
-  // image since text in generated images often comes out garbled.
   return [
-    `kawaii botanical illustration of ${plant.name} (${plant.latin_name}),`,
-    'cute character style, soft pastel watercolor,',
-    'plain white background, single plant centered, friendly and charming,',
-    'japanese kawaii aesthetic, gentle outlines,',
-    'no text, no labels, no watermark',
+    `A kawaii botanical illustration of ${plant.name} (${plant.latin_name}).`,
+    'Cute character style with a friendly face, soft pastel watercolor,',
+    'plain white background, single plant centered.',
+    'Japanese kawaii aesthetic, gentle outlines, charming and warm.',
+    'No text, no labels, no watermark.',
   ].join(' ')
 }
 
@@ -53,7 +55,17 @@ function slugify(name: string): string {
 }
 
 async function generateImage(prompt: string): Promise<Buffer> {
-  const response = await fetch(IMAGEN_URL, {
+  // Imagen models use the :predict endpoint with `instances`.
+  // Gemini image models use :generateContent with multimodal output.
+  if (IMAGE_MODEL.startsWith('imagen')) {
+    return generateViaPredict(prompt)
+  }
+  return generateViaGenerateContent(prompt)
+}
+
+async function generateViaPredict(prompt: string): Promise<Buffer> {
+  const url = `${API_BASE}/models/${IMAGE_MODEL}:predict?key=${GOOGLE_AI_KEY}`
+  const response = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -69,15 +81,53 @@ async function generateImage(prompt: string): Promise<Buffer> {
 
   if (!response.ok) {
     const text = await response.text()
-    throw new Error(`Imagen API ${response.status}: ${text}`)
+    throw new Error(`Imagen API ${response.status}: ${text.slice(0, 500)}`)
   }
 
   const data = (await response.json()) as {
-    predictions?: Array<{ bytesBase64Encoded?: string; mimeType?: string }>
+    predictions?: Array<{ bytesBase64Encoded?: string }>
   }
   const base64 = data.predictions?.[0]?.bytesBase64Encoded
   if (!base64) {
-    throw new Error(`Imagen response missing image bytes: ${JSON.stringify(data).slice(0, 300)}`)
+    throw new Error(`No image bytes in response: ${JSON.stringify(data).slice(0, 300)}`)
+  }
+  return Buffer.from(base64, 'base64')
+}
+
+async function generateViaGenerateContent(prompt: string): Promise<Buffer> {
+  const url = `${API_BASE}/models/${IMAGE_MODEL}:generateContent?key=${GOOGLE_AI_KEY}`
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: {
+        // Some Gemini image models require both modalities to be requested.
+        responseModalities: ['IMAGE', 'TEXT'],
+      },
+    }),
+  })
+
+  if (!response.ok) {
+    const text = await response.text()
+    throw new Error(`Gemini image API ${response.status}: ${text.slice(0, 500)}`)
+  }
+
+  const data = (await response.json()) as {
+    candidates?: Array<{
+      content?: {
+        parts?: Array<{
+          inlineData?: { mimeType?: string; data?: string }
+        }>
+      }
+    }>
+  }
+  const inlinePart = data.candidates?.[0]?.content?.parts?.find(
+    (p) => p.inlineData?.data
+  )
+  const base64 = inlinePart?.inlineData?.data
+  if (!base64) {
+    throw new Error(`No image in response: ${JSON.stringify(data).slice(0, 300)}`)
   }
   return Buffer.from(base64, 'base64')
 }
@@ -105,11 +155,52 @@ async function uploadImage(
   return publicUrl
 }
 
-async function main() {
-  // CLI flag: --all reprocesses every plant; default skips ones that already
-  // have an illustration_url. Useful for restyling the whole catalog later.
-  const regenAll = process.argv.includes('--all')
+async function listImageModels() {
+  const url = `${API_BASE}/models?key=${GOOGLE_AI_KEY}`
+  const response = await fetch(url)
+  if (!response.ok) {
+    throw new Error(`ListModels failed: ${response.status} ${await response.text()}`)
+  }
+  const data = (await response.json()) as {
+    models?: Array<{
+      name?: string
+      displayName?: string
+      supportedGenerationMethods?: string[]
+    }>
+  }
+  console.log('Image-generation-capable models for your API key:\n')
+  const candidates = (data.models ?? []).filter((m) => {
+    const n = m.name ?? ''
+    const supports = m.supportedGenerationMethods ?? []
+    const isImagey =
+      n.includes('imagen') || n.includes('image') || n.includes('vision')
+    const generates =
+      supports.includes('predict') || supports.includes('generateContent')
+    return isImagey && generates
+  })
+  if (candidates.length === 0) {
+    console.log('  (none found — your key may not have image-gen access yet)')
+    console.log('\nAll available models:')
+    for (const m of data.models ?? []) {
+      console.log(`  - ${m.name}  [${(m.supportedGenerationMethods ?? []).join(', ')}]`)
+    }
+    return
+  }
+  for (const m of candidates) {
+    console.log(`  - ${m.name}  [${(m.supportedGenerationMethods ?? []).join(', ')}]`)
+  }
+  console.log('\nSet IMAGE_MODEL env var to one of these (without the "models/" prefix).')
+  console.log('Example: IMAGE_MODEL=gemini-2.5-flash-image npm run generate-images')
+}
 
+async function main() {
+  if (process.argv.includes('--list-models')) {
+    await listImageModels()
+    return
+  }
+
+  const regenAll = process.argv.includes('--all')
+  console.log(`Model: ${IMAGE_MODEL}`)
   console.log(regenAll
     ? 'Mode: --all (regenerate every plant)'
     : 'Mode: missing-only (default)')
@@ -155,7 +246,6 @@ async function main() {
       failed++
     }
 
-    // Light rate-limit pacing between requests.
     await new Promise((r) => setTimeout(r, 1500))
   }
 
