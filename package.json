@@ -5,7 +5,9 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "seed-plants": "tsx scripts/seed-plants.ts",
+    "generate-images": "tsx scripts/generate-images.ts"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",

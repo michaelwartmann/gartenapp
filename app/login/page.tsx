@@ -1,65 +1,76 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useActionState, useEffect, useState } from 'react'
+import { loginAction, type LoginState } from './actions'
 
 export default function LoginPage() {
-  const [password, setPassword] = useState('')
-  const [error, setError] = useState(false)
+  const [state, formAction, pending] = useActionState<LoginState, FormData>(
+    loginAction,
+    undefined
+  )
   const [shake, setShake] = useState(false)
-  const router = useRouter()
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    
-    if (password === 'Garten2026') {
-      // Set persistent auth cookie (1 year). Survives browser restart so
-      // mobile users don't have to re-enter the password during garden trips.
-      document.cookie = 'garten_auth=true; path=/; max-age=31536000; SameSite=Lax; Secure'
-      router.push('/')
-    } else {
-      setError(true)
+  useEffect(() => {
+    if (state?.error) {
       setShake(true)
-      setPassword('')
-      setTimeout(() => setShake(false), 600)
+      const t = setTimeout(() => setShake(false), 600)
+      return () => clearTimeout(t)
     }
-  }
+  }, [state])
+
+  const hasError = !!state?.error
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-6 py-8" style={{ backgroundColor: '#FAFAF7' }}>
+    <div
+      className="min-h-screen flex items-center justify-center px-6 py-8"
+      style={{ backgroundColor: '#FAFAF7' }}
+    >
       <div className={`w-full max-w-sm ${shake ? 'animate-shake' : ''}`}>
-        <form onSubmit={handleSubmit} className="space-y-8">
+        <form action={formAction} className="space-y-6">
           <div className="text-center">
             <h1 className="text-3xl font-medium" style={{ color: '#2C2C2A' }}>
               🌱 Gartenapp
             </h1>
           </div>
-          
-          <div>
+
+          <div className="space-y-4">
             <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Passwort eingeben"
+              type="text"
+              name="gardenName"
+              placeholder="Gartenname (z.B. Mein Garten)"
               className="w-full px-6 py-4 rounded-xl border-2 bg-white text-lg focus:outline-none focus:border-opacity-100 min-h-[56px]"
-              style={{ 
-                borderColor: error ? '#C17B5C' : '#E8E6DF',
-                color: '#2C2C2A'
+              style={{
+                borderColor: hasError ? '#C17B5C' : '#E8E6DF',
+                color: '#2C2C2A',
               }}
               autoFocus
+              autoComplete="off"
+            />
+
+            <input
+              type="password"
+              name="password"
+              placeholder="Passwort eingeben"
+              className="w-full px-6 py-4 rounded-xl border-2 bg-white text-lg focus:outline-none focus:border-opacity-100 min-h-[56px]"
+              style={{
+                borderColor: hasError ? '#C17B5C' : '#E8E6DF',
+                color: '#2C2C2A',
+              }}
+              autoComplete="current-password"
             />
           </div>
-          
+
           <button
             type="submit"
-            className="w-full py-4 px-6 rounded-xl text-white font-medium text-lg hover:opacity-90 transition-opacity min-h-[56px] touch-none"
+            disabled={pending}
+            className="w-full py-4 px-6 rounded-xl text-white font-medium text-lg hover:opacity-90 transition-opacity min-h-[56px] touch-none disabled:opacity-60"
             style={{ backgroundColor: '#4A7C59' }}
           >
-            Anmelden
+            {pending ? '...' : 'Anmelden'}
           </button>
         </form>
       </div>
-      
+
       <style jsx>{`
         @keyframes shake {
           0%, 100% { transform: translateX(0); }

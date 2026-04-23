@@ -39,7 +39,7 @@ export default function PlantDetailPage({ params }: { params: Promise<{ id: stri
   const [gardenPlant, setGardenPlant] = useState<GardenPlant | null>(null)
   const [editingField, setEditingField] = useState<string | null>(null)
   const [editValue, setEditValue] = useState('')
-  const [kimGardenId, setKimGardenId] = useState<string | null>(null)
+  const [gardenId, setGardenId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
@@ -47,12 +47,17 @@ export default function PlantDetailPage({ params }: { params: Promise<{ id: stri
   const { id } = resolvedParams
 
   useEffect(() => {
+    // Read the current garden id from the cookie set on login.
+    const match = document.cookie.match(/(?:^|;\s*)garten_id=([^;]+)/)
+    setGardenId(match ? decodeURIComponent(match[1]) : null)
+  }, [])
+
+  useEffect(() => {
     async function loadPlantData() {
       try {
         setLoading(true)
         setError(null)
 
-        // Get plant data
         const { data: plantData, error: plantError } = await supabase
           .from('plants')
           .select('*')
@@ -67,28 +72,13 @@ export default function PlantDetailPage({ params }: { params: Promise<{ id: stri
           setPlant(plantData)
         }
 
-        // Get Kim's garden ID
-        const { data: kimGarden, error: gardenError } = await supabase
-          .from('gardens')
-          .select('id')
-          .eq('owner_name', 'Kim')
-          .single()
-
-        if (gardenError) {
-          console.warn('Kim garden not found:', gardenError.message)
-          return
-        }
-
-        if (kimGarden) {
-          setKimGardenId(kimGarden.id)
-
-          // Check if Kim has custom data for this plant
+        if (gardenId) {
           const { data: gardenPlantData } = await supabase
             .from('garden_plants')
             .select('*')
-            .eq('garden_id', kimGarden.id)
+            .eq('garden_id', gardenId)
             .eq('plant_id', id)
-            .single()
+            .maybeSingle()
 
           if (gardenPlantData) {
             setGardenPlant(gardenPlantData)
@@ -102,10 +92,13 @@ export default function PlantDetailPage({ params }: { params: Promise<{ id: stri
       }
     }
 
-    if (id) {
+    if (id && gardenId !== null) {
+      loadPlantData()
+    } else if (id && gardenId === null) {
+      // No garden cookie yet — load plant data without garden overrides.
       loadPlantData()
     }
-  }, [id])
+  }, [id, gardenId])
 
   const handleFieldClick = (field: string, currentValue: string) => {
     setEditingField(field)
@@ -113,11 +106,10 @@ export default function PlantDetailPage({ params }: { params: Promise<{ id: stri
   }
 
   const handleSaveField = async () => {
-    if (!kimGardenId || !editingField) return
+    if (!gardenId || !editingField) return
 
     try {
       if (gardenPlant) {
-        // Update existing garden plant
         const { error } = await supabase
           .from('garden_plants')
           .update({ [editingField]: editValue })
@@ -127,11 +119,10 @@ export default function PlantDetailPage({ params }: { params: Promise<{ id: stri
           setGardenPlant({ ...gardenPlant, [editingField]: editValue })
         }
       } else {
-        // Create new garden plant record
         const { data, error } = await supabase
           .from('garden_plants')
           .insert({
-            garden_id: kimGardenId,
+            garden_id: gardenId,
             plant_id: id,
             [editingField]: editValue
           })

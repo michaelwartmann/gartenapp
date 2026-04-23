@@ -61,20 +61,33 @@ garden_plants: id, garden_id, plant_id, [16 override fields], notes
 
 ## 🌱 Plants Database
 
-**8 Plants with authentic German gardening data:**
-1. **Tomate** (Solanum lycopersicum) - Gemüse
-2. **Basilikum** (Ocimum basilicum) - Kraut  
-3. **Möhre** (Daucus carota) - Gemüse
-4. **Zucchini** (Cucurbita pepo) - Gemüse
-5. **Ringelblume** (Calendula officinalis) - Blume
-6. **Spinat** (Spinacia oleracea) - Gemüse
-7. **Rosmarin** (Salvia rosmarinus) - Kraut
-8. **Kürbis** (Cucurbita maxima) - Gemüse
+**Growing catalog of Western European garden plants** with authentic German cultivation data. Source of truth: `data/plants.json` (committed). Seed via `npm run seed-plants` (upserts by `(name, latin_name)`, preserves any existing `illustration_url`).
 
-**16 German Botanical Fields:**
+Categories: **Gemüse, Kraut, Blume, Obst.** Goal coverage: ~150-200 plants.
+
+**16 German Botanical Fields per plant:**
 Sorte, Saatzeit, Saattiefe, Nachbarn, Erde, Witterung, Bodenmilieu, Dünger, Vorzucht, Schneiden, Einwintern, Ernte, Einjährig/Mehrjährig, Pflanzort, Wirkung auf den Körper, Stark-/Schwachzehrer
 
+**Per-garden overrides**: each user (garden) can customize any of the 16 fields locally — stored in `garden_plants` rows scoped by `garden_id`. The login flow upserts a `gardens` row by name and sets `garten_id` cookie.
+
 ## 🛠️ Scripts & Tools
+
+### Plant catalog
+```bash
+# Seed/refresh the plants table from data/plants.json (idempotent upsert)
+npm run seed-plants
+
+# Backfill kawaii images for any plant that has no illustration_url.
+# Default model: gemini-2.5-flash-image (free-tier friendly).
+# Override with IMAGE_MODEL env var if needed (e.g. imagen-3.0-generate-002 if you have paid Imagen access).
+npm run generate-images
+
+# See which image-gen models your API key actually has access to
+npm run generate-images -- --list-models
+
+# Regenerate all images (e.g. for a style refresh) — overwrites existing
+npm run generate-images -- --all
+```
 
 ### Environment Variables
 ```bash
