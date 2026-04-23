@@ -24,6 +24,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SECRET)
 const IMAGE_MODEL = process.env.IMAGE_MODEL || 'gemini-2.5-flash-image'
 
 const API_BASE = 'https://generativelanguage.googleapis.com/v1beta'
+const REQUEST_TIMEOUT_MS = 60_000
 
 type PlantInput = {
   id: string
@@ -68,6 +69,7 @@ async function generateViaPredict(prompt: string): Promise<Buffer> {
   const response = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     body: JSON.stringify({
       instances: [{ prompt }],
       parameters: {
@@ -99,6 +101,7 @@ async function generateViaGenerateContent(prompt: string): Promise<Buffer> {
   const response = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     body: JSON.stringify({
       contents: [{ parts: [{ text: prompt }] }],
       generationConfig: {
