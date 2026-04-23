@@ -20,5 +20,11 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)']
+  // Exclude Next.js internals, favicon, the PWA manifest, and any static
+  // asset by extension. Without these the middleware redirects /manifest
+  // .webmanifest and /icon-*.png to /login, which makes Chrome's PWA
+  // install prompt criteria fail (it can't read the manifest).
+  matcher: [
+    '/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|.*\\.(?:png|jpg|jpeg|svg|webp|webmanifest)$).*)',
+  ],
 }
