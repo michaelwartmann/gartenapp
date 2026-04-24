@@ -10,7 +10,7 @@ export type Plant = {
   name: string
   latin_name: string
   category: 'Gemüse' | 'Kraut' | 'Blume' | 'Obst'
-  illustration_url: string
+  illustration_url: string | null
   sorte: string
   saatzeit: string
   saattiefe: string

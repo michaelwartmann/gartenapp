@@ -159,10 +159,26 @@ export default function SearchFilter({ plants, inGardenIds }: Props) {
       </div>
 
       {filtered.length === 0 && (
-        <div className="text-center py-12" style={{ color: '#888780' }}>
+        <div className="text-center py-8" style={{ color: '#888780' }}>
           <p className="text-base">Keine Pflanzen gefunden.</p>
         </div>
       )}
+
+      <div className="mt-6">
+        <Link
+          href={
+            query.trim()
+              ? `/browse/add?name=${encodeURIComponent(query.trim())}`
+              : '/browse/add'
+          }
+          className="block w-full text-center py-4 rounded-xl border-2 border-dashed text-sm font-medium"
+          style={{ borderColor: '#C8C5BA', color: '#4A7C59' }}
+        >
+          {filtered.length === 0 && query.trim()
+            ? `„${query.trim()}" selbst hinzufügen →`
+            : '+ Pflanze fehlt? Selbst hinzufügen'}
+        </Link>
+      </div>
     </div>
   )
 }

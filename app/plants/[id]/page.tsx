@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, use } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Image from 'next/image'
 import { supabase, Plant, GardenPlant } from '@/lib/supabase'
 
@@ -42,7 +42,10 @@ export default function PlantDetailPage({ params }: { params: Promise<{ id: stri
   const [gardenId, setGardenId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [reloadCounter, setReloadCounter] = useState(0)
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const fresh = searchParams.get('fresh') === '1'
   const resolvedParams = use(params)
   const { id } = resolvedParams
 
@@ -98,7 +101,20 @@ export default function PlantDetailPage({ params }: { params: Promise<{ id: stri
       // No garden cookie yet — load plant data without garden overrides.
       loadPlantData()
     }
-  }, [id, gardenId])
+  }, [id, gardenId, reloadCounter])
+
+  // When arriving with ?fresh=1 (just added a new plant), auto-refetch at
+  // ~6s and ~14s so the Gemini-enriched fields and kawaii image appear
+  // without the user having to pull-to-refresh.
+  useEffect(() => {
+    if (!fresh) return
+    const t1 = setTimeout(() => setReloadCounter((c) => c + 1), 6000)
+    const t2 = setTimeout(() => setReloadCounter((c) => c + 1), 14000)
+    return () => {
+      clearTimeout(t1)
+      clearTimeout(t2)
+    }
+  }, [fresh])
 
   const handleFieldClick = (field: string, currentValue: string) => {
     setEditingField(field)
@@ -210,17 +226,32 @@ export default function PlantDetailPage({ params }: { params: Promise<{ id: stri
     )
   }
 
+  const hasAnyContent = Object.keys(fieldLabels).some(
+    (k) => !!(plant as unknown as Record<string, string>)[k]
+  )
+  const showFreshBanner = fresh && !hasAnyContent
+  const categoryColor = getCategoryColor(plant.category)
+
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#FAFAF7' }}>
       {/* Header image */}
       <div className="relative h-64">
-        <Image
-          src={plant.illustration_url}
-          alt={plant.name}
-          fill
-          className="object-cover rounded-b-xl"
-          sizes="(max-width: 480px) 100vw, 480px"
-        />
+        {plant.illustration_url ? (
+          <Image
+            src={plant.illustration_url}
+            alt={plant.name}
+            fill
+            className="object-cover rounded-b-xl"
+            sizes="(max-width: 480px) 100vw, 480px"
+          />
+        ) : (
+          <div
+            className="w-full h-full rounded-b-xl flex items-center justify-center"
+            style={{ backgroundColor: categoryColor + '22' }}
+          >
+            <span className="text-6xl">🌱</span>
+          </div>
+        )}
         <button
           onClick={() => router.back()}
           className="absolute top-4 left-4 w-12 h-12 bg-white/90 rounded-full flex items-center justify-center text-lg font-medium touch-none"
@@ -232,6 +263,15 @@ export default function PlantDetailPage({ params }: { params: Promise<{ id: stri
 
       {/* Content */}
       <div className="max-w-md mx-auto px-4 py-6">
+        {showFreshBanner && (
+          <div
+            className="mb-4 rounded-lg p-3 text-xs text-center leading-relaxed"
+            style={{ backgroundColor: '#F0EDE4', color: '#4A7C59' }}
+          >
+            ✨ Wird im Hintergrund mit KI ausgefüllt — gleich automatisch
+            neu geladen.
+          </div>
+        )}
         {/* Plant info */}
         <div className="text-center mb-6">
           <h1 className="text-2xl font-semibold mb-2" style={{ color: '#2C2C2A' }}>
