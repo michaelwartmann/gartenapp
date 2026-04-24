@@ -23,18 +23,19 @@ A digital plant companion inspired by Kim's physical plant card album. Mobile-fi
 ## 🎯 Current State
 
 ### ✅ Features Complete
-- **Plant List**: 2-column mobile grid with plant cards
-- **Plant Details**: Full botanical info with inline editing
-- **Authentication**: Password-protected access
-- **Mobile Optimized**: Touch-friendly scrolling and interactions
-- **Personal Customization**: Individual field overrides saved separately
-- **Error Handling**: Robust loading states and error messages
-- **Image Management**: Kawaii generation script with German character support
+- **115-plant catalog** with 16 German botanical fields each — seeded from `data/plants.json`
+- **Mein Garten split**: "Im Garten 🌱" (planted) vs "Meine Samen" (interessiert), per user
+- **"Was kann ich pflanzen?"** — Gemini 2.5 Flash-Lite advisor at `/empfehlungen` with idea/verdict block + suggestions + companion-conflict filter
+- **Per-garden passwords**: first-login setup, forgot-password via Resend email to admin, 10-min reset-token dedup poka-yoke
+- **Gepflanzt / Nicht mehr gepflanzt**: toggle `planted_at DATE` on plant detail
+- **Manual plant + Gemini autofill** (`/browse/add`): fills the 16 fields + kawaii illustration in the background
+- **On-demand kawaii image generation** via `gemini-2.5-flash-image` ("Nano Banana")
+- **PWA installable**: manifest + icons cleared through middleware
 
 ### 🔧 Technical Features
 - Mobile-first responsive design (max-width 480px)
-- 8 plants with 16 German botanical fields each
-- React.use(params) for Next.js 16 compatibility
+- Next.js 16 App Router + React 19 server actions (`useActionState`, `after()`)
+- Server-side cookies for iOS PWA persistence (`httpOnly` + `Set-Cookie`)
 - Filename sanitization for German special characters (ü→u, ö→o, ä→a, ß→ss)
 - Supabase Storage integration for custom illustrations
 
@@ -49,11 +50,12 @@ A digital plant companion inspired by Kim's physical plant card album. Mobile-fi
 -- Core plant data (shared)
 plants: id, name, latin_name, category, illustration_url, [16 botanical fields]
 
--- Garden ownership
-gardens: id, owner_name (customizable for any user)
+-- Per-garden auth + ownership
+gardens: id, owner_name, password_hash, reset_token, reset_expires_at
 
--- Personal field overrides
-garden_plants: id, garden_id, plant_id, [16 override fields], notes
+-- Per-garden plant rows: interessiert (planted_at NULL) vs gepflanzt (date set)
+garden_plants: id, garden_id, plant_id, planted_at DATE,
+               [16 override fields], notes
 ```
 
 ### Storage Buckets
