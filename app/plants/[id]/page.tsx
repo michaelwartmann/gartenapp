@@ -1,9 +1,21 @@
 'use client'
 
-import { useState, useEffect, use } from 'react'
+import { useState, useEffect, use, useTransition } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Image from 'next/image'
 import { supabase, Plant, GardenPlant } from '@/lib/supabase'
+import {
+  markAsPlanted,
+  updatePlantedDate,
+  markAsNotPlanted,
+} from './actions'
+
+function formatISODate(iso: string | null): string {
+  if (!iso) return ''
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso)
+  if (!m) return iso
+  return `${m[3]}.${m[2]}.${m[1]}`
+}
 
 const fieldLabels = {
   sorte: 'Sorte',
@@ -43,6 +55,9 @@ export default function PlantDetailPage({ params }: { params: Promise<{ id: stri
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [reloadCounter, setReloadCounter] = useState(0)
+  const [editingPlantedDate, setEditingPlantedDate] = useState(false)
+  const [plantedDateDraft, setPlantedDateDraft] = useState('')
+  const [plantedPending, startPlantedTransition] = useTransition()
   const router = useRouter()
   const searchParams = useSearchParams()
   const fresh = searchParams.get('fresh') === '1'
@@ -115,6 +130,43 @@ export default function PlantDetailPage({ params }: { params: Promise<{ id: stri
       clearTimeout(t2)
     }
   }, [fresh])
+
+  const handleMarkPlanted = () => {
+    if (!gardenPlant) return
+    startPlantedTransition(async () => {
+      const res = await markAsPlanted(gardenPlant.id)
+      if ('ok' in res) {
+        setGardenPlant({ ...gardenPlant, planted_at: res.plantedAt })
+      }
+    })
+  }
+
+  const handleStartEditDate = () => {
+    setPlantedDateDraft(gardenPlant?.planted_at ?? '')
+    setEditingPlantedDate(true)
+  }
+
+  const handleSavePlantedDate = () => {
+    if (!gardenPlant || !plantedDateDraft) return
+    startPlantedTransition(async () => {
+      const res = await updatePlantedDate(gardenPlant.id, plantedDateDraft)
+      if ('ok' in res) {
+        setGardenPlant({ ...gardenPlant, planted_at: res.plantedAt })
+        setEditingPlantedDate(false)
+      }
+    })
+  }
+
+  const handleUnplant = () => {
+    if (!gardenPlant) return
+    startPlantedTransition(async () => {
+      const res = await markAsNotPlanted(gardenPlant.id)
+      if ('ok' in res) {
+        setGardenPlant({ ...gardenPlant, planted_at: null })
+        setEditingPlantedDate(false)
+      }
+    })
+  }
 
   const handleFieldClick = (field: string, currentValue: string) => {
     setEditingField(field)
@@ -280,13 +332,86 @@ export default function PlantDetailPage({ params }: { params: Promise<{ id: stri
           <p className="text-base mb-3" style={{ color: '#888780' }}>
             {plant.latin_name}
           </p>
-          <div 
+          <div
             className="inline-block px-3 py-1 rounded-lg text-sm font-medium text-white"
             style={{ backgroundColor: getCategoryColor(plant.category) }}
           >
             {plant.category}
           </div>
         </div>
+
+        {/* Gepflanzt state (only when plant is in the user's garden) */}
+        {gardenPlant && (
+          <div className="mb-6">
+            {!gardenPlant.planted_at ? (
+              <button
+                onClick={handleMarkPlanted}
+                disabled={plantedPending}
+                className="w-full py-4 rounded-xl text-white font-medium text-lg min-h-[56px] touch-none disabled:opacity-60"
+                style={{ backgroundColor: '#4A7C59' }}
+              >
+                {plantedPending ? '…' : '🌱 Gepflanzt'}
+              </button>
+            ) : editingPlantedDate ? (
+              <div className="space-y-2">
+                <input
+                  type="date"
+                  value={plantedDateDraft}
+                  onChange={(e) => setPlantedDateDraft(e.target.value)}
+                  className="w-full px-4 py-3 rounded-lg border bg-white text-base min-h-[48px]"
+                  style={{ borderColor: '#E8E6DF', color: '#2C2C2A' }}
+                  autoFocus
+                />
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleSavePlantedDate}
+                    disabled={plantedPending || !plantedDateDraft}
+                    className="flex-1 px-4 py-3 rounded-lg text-white text-base font-medium min-h-[48px] touch-none disabled:opacity-60"
+                    style={{ backgroundColor: '#4A7C59' }}
+                  >
+                    {plantedPending ? '…' : 'Speichern'}
+                  </button>
+                  <button
+                    onClick={() => setEditingPlantedDate(false)}
+                    disabled={plantedPending}
+                    className="flex-1 px-4 py-3 rounded-lg text-base font-medium border min-h-[48px] touch-none"
+                    style={{ borderColor: '#E8E6DF', color: '#888780' }}
+                  >
+                    Abbrechen
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div
+                className="rounded-xl p-4 text-center"
+                style={{ backgroundColor: '#F0EDE4' }}
+              >
+                <p className="text-base" style={{ color: '#4A7C59' }}>
+                  🌱 Seit {formatISODate(gardenPlant.planted_at)} im Garten
+                </p>
+                <div className="mt-2 flex justify-center gap-4 text-sm">
+                  <button
+                    onClick={handleStartEditDate}
+                    disabled={plantedPending}
+                    className="underline disabled:opacity-60"
+                    style={{ color: '#888780' }}
+                  >
+                    Datum ändern
+                  </button>
+                  <span style={{ color: '#E8E6DF' }}>·</span>
+                  <button
+                    onClick={handleUnplant}
+                    disabled={plantedPending}
+                    className="underline disabled:opacity-60"
+                    style={{ color: '#888780' }}
+                  >
+                    Nicht mehr gepflanzt
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Fields */}
         <div className="space-y-4">

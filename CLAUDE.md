@@ -151,14 +151,18 @@ GOOGLE_AI_API_KEY
 
 ## 🎯 v2 Roadmap
 
-Features to build on top of v1.0 (prioritize one per plan):
+Stages shipped on top of v1.0:
 
-1. **On-demand kawaii image generation** — when a user adds a new plant, auto-generate the illustration via Google Imagen/Gemini API and upload to Supabase Storage. Reuses the existing `@google/generative-ai` dep.
-2. **30+ plants** with complete botanical data (currently 8).
-3. **Filter/sort** by any of the 16 botanical dimensions.
-4. **Per-user gardens** — move beyond the single shared password to individual accounts.
-5. **Custom domain** — point `garten.philia-aletheia.art` at Vercel.
-6. **Enhanced mobile UI** — polish and animations.
+- ✅ **Stage 2**: Catalog expansion (115 plants), on-demand kawaii image generation, manual-plant + Gemini autofill.
+- ✅ **Stage 3**: Per-garden passwords, first-login setup flow, forgot-password via Resend email to admin.
+- ✅ **Stage 4A**: "Was kann ich pflanzen?" recommendations via Gemini 2.5 Flash, planted-vs-interessiert split (`garden_plants.planted_at DATE`), "Gepflanzt / Nicht mehr gepflanzt" controls on plant detail, conflict-detection ("Tomaten + Kartoffeln ist heikel") in free-text recommendations.
+
+Next up:
+
+1. **Stage 4B — "Was ist jetzt zu tun?"** time-aware reminders per planted plant (ausgeizen, gießen, Ernte-Fenster) using `planted_at` + current date. Likely a "Diese Woche" section on Mein Garten, Gemini-generated, cached daily.
+2. **Filter/sort** the catalog by any of the 16 botanical dimensions.
+3. **Custom domain** — ✅ `garten.philia-aletheia.art` live on Vercel.
+4. **Enhanced mobile UI** — polish and animations.
 
 ## 📝 Development Notes
 

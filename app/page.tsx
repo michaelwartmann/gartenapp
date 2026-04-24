@@ -15,35 +15,85 @@ function categoryColor(cat: string): string {
   }
 }
 
-async function getMyPlants(gardenId: string | null): Promise<Plant[]> {
-  if (!gardenId) return []
+type SplitPlants = {
+  planted: Plant[]
+  interested: Plant[]
+}
+
+async function getMyPlants(gardenId: string | null): Promise<SplitPlants> {
+  if (!gardenId) return { planted: [], interested: [] }
   const { data, error } = await supabase
     .from('garden_plants')
-    .select('plants(*)')
+    .select('planted_at, plants(*)')
     .eq('garden_id', gardenId)
     .order('plant_id')
 
   if (error) {
     console.error('Error fetching garden plants:', error)
-    return []
+    return { planted: [], interested: [] }
   }
 
-  // Flatten the joined plants. Supabase returns plants either as object or array
-  // depending on FK detection; handle both shapes.
-  const plants: Plant[] = []
+  const planted: Plant[] = []
+  const interested: Plant[] = []
   for (const row of data ?? []) {
-    const p = (row as { plants: Plant | Plant[] | null }).plants
-    if (Array.isArray(p)) plants.push(...p)
-    else if (p) plants.push(p)
+    const r = row as { planted_at: string | null; plants: Plant | Plant[] | null }
+    const target = r.planted_at ? planted : interested
+    if (Array.isArray(r.plants)) target.push(...r.plants)
+    else if (r.plants) target.push(r.plants)
   }
-  // Sort by display name
-  plants.sort((a, b) => a.name.localeCompare(b.name, 'de'))
-  return plants
+
+  const byName = (a: Plant, b: Plant) => a.name.localeCompare(b.name, 'de')
+  planted.sort(byName)
+  interested.sort(byName)
+
+  return { planted, interested }
+}
+
+function PlantCard({ plant }: { plant: Plant }) {
+  return (
+    <Link href={`/plants/${plant.id}`} className="block">
+      <div
+        className="bg-white rounded-xl border overflow-hidden transition-all duration-200 active:scale-95 min-h-[200px]"
+        style={{ borderColor: '#E8E6DF' }}
+      >
+        <div className="aspect-square relative" style={{ backgroundColor: '#FAFAF7' }}>
+          {plant.illustration_url ? (
+            <Image
+              src={plant.illustration_url}
+              alt={plant.name}
+              fill
+              className="object-cover"
+              sizes="(max-width: 480px) 50vw, 200px"
+            />
+          ) : (
+            <div
+              className="absolute inset-0 flex items-center justify-center text-4xl"
+              style={{
+                backgroundColor: categoryColor(plant.category) + '22',
+                color: categoryColor(plant.category),
+              }}
+            >
+              🌱
+            </div>
+          )}
+        </div>
+        <div className="p-4">
+          <h2 className="font-medium text-base leading-tight" style={{ color: '#2C2C2A' }}>
+            {plant.name}
+          </h2>
+          <p className="text-sm mt-1 leading-tight italic" style={{ color: '#888780' }}>
+            {plant.latin_name}
+          </p>
+        </div>
+      </div>
+    </Link>
+  )
 }
 
 export default async function Home() {
   const gardenId = await getCurrentGardenId()
-  const plants = await getMyPlants(gardenId)
+  const { planted, interested } = await getMyPlants(gardenId)
+  const total = planted.length + interested.length
 
   return (
     <div className="min-h-screen px-4 py-6 pb-12" style={{ backgroundColor: '#FAFAF7' }}>
@@ -59,7 +109,19 @@ export default async function Home() {
           </Link>
         </header>
 
-        {plants.length === 0 ? (
+        <Link
+          href="/empfehlungen"
+          className="block mb-6 rounded-xl p-4 text-center transition-all duration-200 active:scale-95"
+          style={{
+            backgroundColor: '#FFFFFF',
+            border: '2px dashed #4A7C59',
+            color: '#4A7C59',
+          }}
+        >
+          <span className="text-base font-medium">🌿 Was kann ich pflanzen? →</span>
+        </Link>
+
+        {total === 0 ? (
           <div className="text-center py-16 px-6">
             <div className="text-5xl mb-4">🌱</div>
             <h2 className="text-lg font-medium mb-2" style={{ color: '#2C2C2A' }}>
@@ -77,45 +139,34 @@ export default async function Home() {
             </Link>
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-4">
-            {plants.map((plant) => (
-              <Link key={plant.id} href={`/plants/${plant.id}`} className="block">
-                <div
-                  className="bg-white rounded-xl border overflow-hidden transition-all duration-200 active:scale-95 min-h-[200px]"
-                  style={{ borderColor: '#E8E6DF' }}
+          <div className="space-y-8">
+            {planted.length > 0 && (
+              <section>
+                <h2
+                  className="text-xs font-medium uppercase tracking-wide mb-3"
+                  style={{ color: '#888780' }}
                 >
-                  <div className="aspect-square relative" style={{ backgroundColor: '#FAFAF7' }}>
-                    {plant.illustration_url ? (
-                      <Image
-                        src={plant.illustration_url}
-                        alt={plant.name}
-                        fill
-                        className="object-cover"
-                        sizes="(max-width: 480px) 50vw, 200px"
-                      />
-                    ) : (
-                      <div
-                        className="absolute inset-0 flex items-center justify-center text-4xl"
-                        style={{
-                          backgroundColor: categoryColor(plant.category) + '22',
-                          color: categoryColor(plant.category),
-                        }}
-                      >
-                        🌱
-                      </div>
-                    )}
-                  </div>
-                  <div className="p-4">
-                    <h2 className="font-medium text-base leading-tight" style={{ color: '#2C2C2A' }}>
-                      {plant.name}
-                    </h2>
-                    <p className="text-sm mt-1 leading-tight italic" style={{ color: '#888780' }}>
-                      {plant.latin_name}
-                    </p>
-                  </div>
+                  Im Garten 🌱
+                </h2>
+                <div className="grid grid-cols-2 gap-4">
+                  {planted.map((p) => <PlantCard key={p.id} plant={p} />)}
                 </div>
-              </Link>
-            ))}
+              </section>
+            )}
+
+            {interested.length > 0 && (
+              <section>
+                <h2
+                  className="text-xs font-medium uppercase tracking-wide mb-3"
+                  style={{ color: '#888780' }}
+                >
+                  Meine Samen
+                </h2>
+                <div className="grid grid-cols-2 gap-4">
+                  {interested.map((p) => <PlantCard key={p.id} plant={p} />)}
+                </div>
+              </section>
+            )}
           </div>
         )}
       </div>

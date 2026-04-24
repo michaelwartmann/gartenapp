@@ -40,6 +40,7 @@ export type GardenPlant = {
   id: string
   garden_id: string
   plant_id: string
+  planted_at: string | null
   notes?: string
   sorte?: string
   saatzeit?: string
