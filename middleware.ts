@@ -3,8 +3,12 @@ import { NextRequest, NextResponse } from 'next/server'
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
   
-  // Skip auth check for login page
-  if (pathname === '/login') {
+  // Skip auth check for login + password-reset routes
+  if (
+    pathname === '/login' ||
+    pathname === '/forgot-password' ||
+    pathname.startsWith('/admin/reset/')
+  ) {
     return NextResponse.next()
   }
   
