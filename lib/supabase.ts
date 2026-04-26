@@ -34,6 +34,8 @@ export type Garden = {
   id: string
   owner_name: string
   created_at: string
+  weekly_tasks_cache: unknown
+  weekly_tasks_cache_date: string | null
 }
 
 export type GardenPlant = {
