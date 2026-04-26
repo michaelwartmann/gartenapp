@@ -2,6 +2,12 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { supabase, type Plant } from '@/lib/supabase'
 import { getCurrentGardenId } from '@/lib/currentGarden'
+import { getWeeklyTasks } from '@/lib/getWeeklyTasks'
+import type {
+  PlantedPlantInput,
+  Urgency,
+  WeeklyTask,
+} from '@/lib/weeklyTasks'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,10 +24,11 @@ function categoryColor(cat: string): string {
 type SplitPlants = {
   planted: Plant[]
   interested: Plant[]
+  plantedForTasks: PlantedPlantInput[]
 }
 
 async function getMyPlants(gardenId: string | null): Promise<SplitPlants> {
-  if (!gardenId) return { planted: [], interested: [] }
+  if (!gardenId) return { planted: [], interested: [], plantedForTasks: [] }
   const { data, error } = await supabase
     .from('garden_plants')
     .select('planted_at, plants(*)')
@@ -30,23 +37,107 @@ async function getMyPlants(gardenId: string | null): Promise<SplitPlants> {
 
   if (error) {
     console.error('Error fetching garden plants:', error)
-    return { planted: [], interested: [] }
+    return { planted: [], interested: [], plantedForTasks: [] }
   }
 
   const planted: Plant[] = []
   const interested: Plant[] = []
+  const plantedForTasks: PlantedPlantInput[] = []
   for (const row of data ?? []) {
     const r = row as { planted_at: string | null; plants: Plant | Plant[] | null }
-    const target = r.planted_at ? planted : interested
-    if (Array.isArray(r.plants)) target.push(...r.plants)
-    else if (r.plants) target.push(r.plants)
+    const plantList: Plant[] = Array.isArray(r.plants)
+      ? r.plants
+      : r.plants
+      ? [r.plants]
+      : []
+    if (r.planted_at) {
+      planted.push(...plantList)
+      for (const p of plantList) {
+        plantedForTasks.push({
+          plant_id: p.id,
+          name: p.name,
+          category: p.category,
+          planted_at: r.planted_at,
+          saatzeit: p.saatzeit ?? '',
+          vorzucht: p.vorzucht ?? '',
+          schneiden: p.schneiden ?? '',
+          ernte: p.ernte ?? '',
+          einjaehrig_oder_mehrjaehrig: p.einjaehrig_oder_mehrjaehrig ?? '',
+        })
+      }
+    } else {
+      interested.push(...plantList)
+    }
   }
 
   const byName = (a: Plant, b: Plant) => a.name.localeCompare(b.name, 'de')
   planted.sort(byName)
   interested.sort(byName)
 
-  return { planted, interested }
+  return { planted, interested, plantedForTasks }
+}
+
+function urgencyPill(u: Urgency): { bg: string; fg: string; label: string } {
+  if (u === 'jetzt') {
+    return { bg: '#FDE8E2', fg: '#C17B5C', label: 'JETZT' }
+  }
+  if (u === 'diese_woche') {
+    return { bg: '#E8F1EA', fg: '#4A7C59', label: 'DIESE WOCHE' }
+  }
+  return { bg: '#F0EFEA', fg: '#888780', label: 'DEMNÄCHST' }
+}
+
+function WeeklyTasksSection({ tasks }: { tasks: WeeklyTask[] }) {
+  if (tasks.length === 0) return null
+  return (
+    <section
+      className="mb-6 bg-white rounded-xl border p-4"
+      style={{ borderColor: '#E8E6DF' }}
+    >
+      <h2
+        className="text-base font-medium mb-3"
+        style={{ color: '#2C2C2A' }}
+      >
+        📋 Diese Woche
+      </h2>
+      <div className="space-y-3">
+        {tasks.map((t, i) => {
+          const pill = urgencyPill(t.urgency)
+          return (
+            <Link
+              key={`${t.plant_id}-${i}`}
+              href={`/plants/${t.plant_id}`}
+              className="block rounded-lg p-3 transition-all duration-200 active:scale-[0.98]"
+              style={{ backgroundColor: '#FAFAF7' }}
+            >
+              <div className="flex items-start gap-3">
+                <span
+                  className="shrink-0 text-[10px] font-semibold uppercase tracking-wide rounded px-2 py-1 mt-0.5"
+                  style={{ backgroundColor: pill.bg, color: pill.fg }}
+                >
+                  {pill.label}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div
+                    className="text-sm font-medium leading-snug"
+                    style={{ color: '#2C2C2A' }}
+                  >
+                    {t.task}
+                  </div>
+                  <div
+                    className="text-sm leading-snug mt-1"
+                    style={{ color: '#888780' }}
+                  >
+                    {t.why}
+                  </div>
+                </div>
+              </div>
+            </Link>
+          )
+        })}
+      </div>
+    </section>
+  )
 }
 
 function PlantCard({ plant }: { plant: Plant }) {
@@ -92,8 +183,13 @@ function PlantCard({ plant }: { plant: Plant }) {
 
 export default async function Home() {
   const gardenId = await getCurrentGardenId()
-  const { planted, interested } = await getMyPlants(gardenId)
+  const { planted, interested, plantedForTasks } = await getMyPlants(gardenId)
   const total = planted.length + interested.length
+
+  const weeklyTasks =
+    gardenId && plantedForTasks.length > 0
+      ? await getWeeklyTasks(gardenId, plantedForTasks)
+      : { tasks: [] }
 
   return (
     <div className="min-h-screen px-4 py-6 pb-12" style={{ backgroundColor: '#FAFAF7' }}>
@@ -108,6 +204,8 @@ export default async function Home() {
             + Pflanzen
           </Link>
         </header>
+
+        <WeeklyTasksSection tasks={weeklyTasks.tasks} />
 
         <Link
           href="/empfehlungen"

@@ -27,6 +27,7 @@ type EnsureOwnResult =
   | { error: 'no-garden' | 'not-in-garden' }
   | {
       supabase: ReturnType<typeof adminClient>
+      gardenId: string
       gardenPlantId: string
       plantId: string
     }
@@ -44,8 +45,22 @@ async function ensureOwn(gardenPlantId: string): Promise<EnsureOwnResult> {
   if (data.garden_id !== gardenId) return { error: 'not-in-garden' }
   return {
     supabase,
+    gardenId,
     gardenPlantId: data.id as string,
     plantId: data.plant_id as string,
+  }
+}
+
+async function clearWeeklyTasksCache(
+  supabase: ReturnType<typeof adminClient>,
+  gardenId: string
+): Promise<void> {
+  const { error } = await supabase
+    .from('gardens')
+    .update({ weekly_tasks_cache: null, weekly_tasks_cache_date: null })
+    .eq('id', gardenId)
+  if (error) {
+    console.error('clearWeeklyTasksCache failed:', error)
   }
 }
 
@@ -64,6 +79,7 @@ export async function markAsPlanted(
       console.error('markAsPlanted failed:', error)
       return { error: 'server' }
     }
+    await clearWeeklyTasksCache(own.supabase, own.gardenId)
     revalidatePath('/')
     revalidatePath(`/plants/${own.plantId}`)
     return { ok: true, plantedAt: date }
@@ -89,6 +105,7 @@ export async function updatePlantedDate(
       console.error('updatePlantedDate failed:', error)
       return { error: 'server' }
     }
+    await clearWeeklyTasksCache(own.supabase, own.gardenId)
     revalidatePath('/')
     revalidatePath(`/plants/${own.plantId}`)
     return { ok: true, plantedAt: dateISO }
@@ -112,6 +129,7 @@ export async function markAsNotPlanted(
       console.error('markAsNotPlanted failed:', error)
       return { error: 'server' }
     }
+    await clearWeeklyTasksCache(own.supabase, own.gardenId)
     revalidatePath('/')
     revalidatePath(`/plants/${own.plantId}`)
     return { ok: true, plantedAt: null }

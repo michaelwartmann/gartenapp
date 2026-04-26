@@ -25,6 +25,7 @@ A digital plant companion inspired by Kim's physical plant card album. Mobile-fi
 ### ✅ Features Complete
 - **115-plant catalog** with 16 German botanical fields each — seeded from `data/plants.json`
 - **Mein Garten split**: "Im Garten 🌱" (planted) vs "Meine Samen" (interessiert), per user
+- **"Diese Woche"** time-aware tasks per planted plant on Mein Garten — Gemini 2.5 Flash-Lite, cached daily on `gardens.weekly_tasks_cache` (JSONB) + `weekly_tasks_cache_date`, invalidated on every Gepflanzt/Datum-ändern/Nicht-mehr-gepflanzt action
 - **"Was kann ich pflanzen?"** — Gemini 2.5 Flash-Lite advisor at `/empfehlungen` with idea/verdict block + suggestions + companion-conflict filter
 - **Per-garden passwords**: first-login setup, forgot-password via Resend email to admin, 10-min reset-token dedup poka-yoke
 - **Gepflanzt / Nicht mehr gepflanzt**: toggle `planted_at DATE` on plant detail
@@ -50,8 +51,9 @@ A digital plant companion inspired by Kim's physical plant card album. Mobile-fi
 -- Core plant data (shared)
 plants: id, name, latin_name, category, illustration_url, [16 botanical fields]
 
--- Per-garden auth + ownership
-gardens: id, owner_name, password_hash, reset_token, reset_expires_at
+-- Per-garden auth + ownership + weekly-tasks cache
+gardens: id, owner_name, password_hash, reset_token, reset_expires_at,
+         weekly_tasks_cache JSONB, weekly_tasks_cache_date DATE
 
 -- Per-garden plant rows: interessiert (planted_at NULL) vs gepflanzt (date set)
 garden_plants: id, garden_id, plant_id, planted_at DATE,
@@ -158,13 +160,13 @@ Stages shipped on top of v1.0:
 - ✅ **Stage 2**: Catalog expansion (115 plants), on-demand kawaii image generation, manual-plant + Gemini autofill.
 - ✅ **Stage 3**: Per-garden passwords, first-login setup flow, forgot-password via Resend email to admin.
 - ✅ **Stage 4A**: "Was kann ich pflanzen?" recommendations via Gemini 2.5 Flash, planted-vs-interessiert split (`garden_plants.planted_at DATE`), "Gepflanzt / Nicht mehr gepflanzt" controls on plant detail, conflict-detection ("Tomaten + Kartoffeln ist heikel") in free-text recommendations.
+- ✅ **Stage 4B**: "Diese Woche" time-aware tasks block at the top of Mein Garten. Gemini 2.5 Flash-Lite reads `(today, planted plants + planted_at + saatzeit/vorzucht/schneiden/ernte)` and returns up to 8 imperative German tasks tagged `jetzt` / `diese_woche` / `demnaechst`. Cached per-garden-per-day on `gardens.weekly_tasks_cache(_date)`; invalidated by `markAsPlanted` / `updatePlantedDate` / `markAsNotPlanted`. Section hides when no planted plants or when Gemini returns zero tasks.
 
 Next up:
 
-1. **Stage 4B — "Was ist jetzt zu tun?"** time-aware reminders per planted plant (ausgeizen, gießen, Ernte-Fenster) using `planted_at` + current date. Likely a "Diese Woche" section on Mein Garten, Gemini-generated, cached daily.
+1. **Stage 4C** (optional) — push notifications / email reminders driven off the same daily-tasks pipeline. Defer until usage signals it adds value.
 2. **Filter/sort** the catalog by any of the 16 botanical dimensions.
-3. **Custom domain** — ✅ `garten.philia-aletheia.art` live on Vercel.
-4. **Enhanced mobile UI** — polish and animations.
+3. **Enhanced mobile UI** — polish and animations.
 
 ## 📝 Development Notes
 
