@@ -3,11 +3,13 @@
 import { useState, useEffect, use, useTransition } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Image from 'next/image'
-import { supabase, Plant, GardenPlant } from '@/lib/supabase'
+import type { Plant, GardenPlant } from '@/lib/supabase'
 import {
   markAsPlanted,
   updatePlantedDate,
   markAsNotPlanted,
+  loadPlantWithOverrides,
+  saveFieldOverride,
 } from './actions'
 
 function formatISODate(iso: string | null): string {
@@ -51,7 +53,6 @@ export default function PlantDetailPage({ params }: { params: Promise<{ id: stri
   const [gardenPlant, setGardenPlant] = useState<GardenPlant | null>(null)
   const [editingField, setEditingField] = useState<string | null>(null)
   const [editValue, setEditValue] = useState('')
-  const [gardenId, setGardenId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [reloadCounter, setReloadCounter] = useState(0)
@@ -65,43 +66,18 @@ export default function PlantDetailPage({ params }: { params: Promise<{ id: stri
   const { id } = resolvedParams
 
   useEffect(() => {
-    // Read the current garden id from the cookie set on login.
-    const match = document.cookie.match(/(?:^|;\s*)garten_id=([^;]+)/)
-    setGardenId(match ? decodeURIComponent(match[1]) : null)
-  }, [])
-
-  useEffect(() => {
     async function loadPlantData() {
       try {
         setLoading(true)
         setError(null)
-
-        const { data: plantData, error: plantError } = await supabase
-          .from('plants')
-          .select('*')
-          .eq('id', id)
-          .single()
-
-        if (plantError) {
-          throw new Error(`Plant not found: ${plantError.message}`)
+        const res = await loadPlantWithOverrides(id)
+        if ('error' in res) {
+          throw new Error(
+            res.error === 'not-found' ? 'Pflanze nicht gefunden' : 'Fehler beim Laden'
+          )
         }
-
-        if (plantData) {
-          setPlant(plantData)
-        }
-
-        if (gardenId) {
-          const { data: gardenPlantData } = await supabase
-            .from('garden_plants')
-            .select('*')
-            .eq('garden_id', gardenId)
-            .eq('plant_id', id)
-            .maybeSingle()
-
-          if (gardenPlantData) {
-            setGardenPlant(gardenPlantData)
-          }
-        }
+        setPlant(res.plant)
+        setGardenPlant(res.gardenPlant)
       } catch (err) {
         console.error('Error loading plant data:', err)
         setError(err instanceof Error ? err.message : 'Failed to load plant data')
@@ -109,14 +85,8 @@ export default function PlantDetailPage({ params }: { params: Promise<{ id: stri
         setLoading(false)
       }
     }
-
-    if (id && gardenId !== null) {
-      loadPlantData()
-    } else if (id && gardenId === null) {
-      // No garden cookie yet — load plant data without garden overrides.
-      loadPlantData()
-    }
-  }, [id, gardenId, reloadCounter])
+    if (id) loadPlantData()
+  }, [id, reloadCounter])
 
   // When arriving with ?fresh=1 (just added a new plant), auto-refetch at
   // ~6s and ~14s so the Gemini-enriched fields and kawaii image appear
@@ -174,37 +144,17 @@ export default function PlantDetailPage({ params }: { params: Promise<{ id: stri
   }
 
   const handleSaveField = async () => {
-    if (!gardenId || !editingField) return
-
+    if (!editingField) return
     try {
-      if (gardenPlant) {
-        const { error } = await supabase
-          .from('garden_plants')
-          .update({ [editingField]: editValue })
-          .eq('id', gardenPlant.id)
-
-        if (!error) {
-          setGardenPlant({ ...gardenPlant, [editingField]: editValue })
-        }
+      const res = await saveFieldOverride(id, editingField, editValue)
+      if ('ok' in res) {
+        setGardenPlant(res.gardenPlant)
       } else {
-        const { data, error } = await supabase
-          .from('garden_plants')
-          .insert({
-            garden_id: gardenId,
-            plant_id: id,
-            [editingField]: editValue
-          })
-          .select()
-          .single()
-
-        if (!error && data) {
-          setGardenPlant(data)
-        }
+        console.error('saveFieldOverride error:', res.error)
       }
     } catch (error) {
       console.error('Error saving field:', error)
     }
-
     setEditingField(null)
     setEditValue('')
   }
