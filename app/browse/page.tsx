@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { supabase } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/supabase'
 import { getCurrentGardenId } from '@/lib/currentGarden'
 import SearchFilter from './SearchFilter'
 
@@ -7,6 +7,7 @@ export const dynamic = 'force-dynamic'
 
 export default async function BrowsePage() {
   const gardenId = await getCurrentGardenId()
+  const supabase = supabaseAdmin()
 
   const { data: plants } = await supabase
     .from('plants')

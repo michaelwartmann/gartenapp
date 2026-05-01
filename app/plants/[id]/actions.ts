@@ -3,6 +3,14 @@
 import { createClient } from '@supabase/supabase-js'
 import { revalidatePath } from 'next/cache'
 import { getCurrentGardenId } from '@/lib/currentGarden'
+import type { Plant, GardenPlant } from '@/lib/supabase'
+
+const FIELD_WHITELIST = new Set<string>([
+  'sorte', 'saatzeit', 'saattiefe', 'nachbarn', 'erde', 'witterung',
+  'bodenmilieu', 'duenger', 'vorzucht', 'schneiden', 'einwintern', 'ernte',
+  'einjaehrig_oder_mehrjaehrig', 'pflanzort', 'wirkung',
+  'stark_oder_schwachzehrer', 'notes',
+])
 
 function adminClient() {
   return createClient(
@@ -111,6 +119,102 @@ export async function updatePlantedDate(
     return { ok: true, plantedAt: dateISO }
   } catch (err) {
     console.error('updatePlantedDate threw:', err)
+    return { error: 'server' }
+  }
+}
+
+export type LoadPlantResult =
+  | { ok: true; plant: Plant; gardenPlant: GardenPlant | null }
+  | { error: 'not-found' | 'server' }
+
+export async function loadPlantWithOverrides(
+  plantId: string
+): Promise<LoadPlantResult> {
+  try {
+    const supabase = adminClient()
+    const { data: plant, error: plantError } = await supabase
+      .from('plants')
+      .select('*')
+      .eq('id', plantId)
+      .maybeSingle()
+    if (plantError) {
+      console.error('loadPlantWithOverrides plant query failed:', plantError)
+      return { error: 'server' }
+    }
+    if (!plant) return { error: 'not-found' }
+
+    const gardenId = await getCurrentGardenId()
+    let gardenPlant: GardenPlant | null = null
+    if (gardenId) {
+      const { data: gp } = await supabase
+        .from('garden_plants')
+        .select('*')
+        .eq('garden_id', gardenId)
+        .eq('plant_id', plantId)
+        .maybeSingle()
+      gardenPlant = (gp as GardenPlant | null) ?? null
+    }
+    return { ok: true, plant: plant as Plant, gardenPlant }
+  } catch (err) {
+    console.error('loadPlantWithOverrides threw:', err)
+    return { error: 'server' }
+  }
+}
+
+export type SaveFieldResult =
+  | { ok: true; gardenPlant: GardenPlant }
+  | { error: 'no-garden' | 'invalid' | 'server' }
+
+export async function saveFieldOverride(
+  plantId: string,
+  field: string,
+  value: string
+): Promise<SaveFieldResult> {
+  if (!FIELD_WHITELIST.has(field)) return { error: 'invalid' }
+  try {
+    const gardenId = await getCurrentGardenId()
+    if (!gardenId) return { error: 'no-garden' }
+    const supabase = adminClient()
+
+    const { data: existing } = await supabase
+      .from('garden_plants')
+      .select('id')
+      .eq('garden_id', gardenId)
+      .eq('plant_id', plantId)
+      .maybeSingle()
+
+    if (existing) {
+      const { data, error } = await supabase
+        .from('garden_plants')
+        .update({ [field]: value })
+        .eq('id', existing.id)
+        .select('*')
+        .single()
+      if (error || !data) {
+        console.error('saveFieldOverride update failed:', error)
+        return { error: 'server' }
+      }
+      revalidatePath(`/plants/${plantId}`)
+      return { ok: true, gardenPlant: data as GardenPlant }
+    }
+
+    const { data, error } = await supabase
+      .from('garden_plants')
+      .insert({
+        garden_id: gardenId,
+        plant_id: plantId,
+        [field]: value,
+      })
+      .select('*')
+      .single()
+    if (error || !data) {
+      console.error('saveFieldOverride insert failed:', error)
+      return { error: 'server' }
+    }
+    revalidatePath(`/plants/${plantId}`)
+    return { ok: true, gardenPlant: data as GardenPlant }
+  } catch (err) {
+    console.error('saveFieldOverride threw:', err)
     return { error: 'server' }
   }
 }

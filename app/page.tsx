@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import Image from 'next/image'
-import { supabase, type Plant } from '@/lib/supabase'
+import { supabaseAdmin, type Plant } from '@/lib/supabase'
 import { getCurrentGardenId } from '@/lib/currentGarden'
 import { getWeeklyTasks } from '@/lib/getWeeklyTasks'
 import type {
@@ -29,6 +29,7 @@ type SplitPlants = {
 
 async function getMyPlants(gardenId: string | null): Promise<SplitPlants> {
   if (!gardenId) return { planted: [], interested: [], plantedForTasks: [] }
+  const supabase = supabaseAdmin()
   const { data, error } = await supabase
     .from('garden_plants')
     .select('planted_at, plants(*)')
