@@ -3,6 +3,10 @@ import Image from 'next/image'
 import { supabaseAdmin, type Plant } from '@/lib/supabase'
 import { getCurrentGardenId } from '@/lib/currentGarden'
 import { getWeeklyTasks } from '@/lib/getWeeklyTasks'
+import { getWeatherForGarden } from '@/lib/getWeatherForGarden'
+import { detectEvents, nearTermEvents } from '@/lib/weatherEvents'
+import WeatherStrip from './wetter/WeatherStrip'
+import WeatherSetup from './wetter/WeatherSetup'
 import type {
   PlantedPlantInput,
   Urgency,
@@ -254,9 +258,16 @@ export default async function Home() {
   const { planted, interested, plantedForTasks, bedsByPlant } = await getMyPlants(gardenId)
   const total = planted.length + interested.length
 
+  const weather = gardenId
+    ? await getWeatherForGarden(gardenId)
+    : { hasLocation: false, forecast: null, location: null }
+
+  const weatherEvents = weather.forecast ? detectEvents(weather.forecast) : []
+  const weatherWarnings = nearTermEvents(weatherEvents)
+
   const weeklyTasks =
     gardenId && plantedForTasks.length > 0
-      ? await getWeeklyTasks(gardenId, plantedForTasks)
+      ? await getWeeklyTasks(gardenId, plantedForTasks, weather.forecast)
       : { tasks: [] }
 
   return (
@@ -281,6 +292,17 @@ export default async function Home() {
             </Link>
           </div>
         </header>
+
+        {weather.hasLocation && weather.forecast ? (
+          <WeatherStrip
+            forecast={weather.forecast}
+            locationLabel={weather.location?.location_label ?? null}
+            events={weatherEvents}
+            warnings={weatherWarnings}
+          />
+        ) : (
+          <WeatherSetup />
+        )}
 
         <WeeklyTasksSection tasks={weeklyTasks.tasks} />
 
