@@ -48,6 +48,8 @@ npm run build                     # Production-Build
 npm run seed-plants               # data/plants.json → DB upserten
 npm run generate-images           # Kawaii-Bilder für Pflanzen ohne Bild
 npm run backfill-families         # plants.family (Solanaceae, …) befüllen
+npm run backfill-bed-kinds        # plants.suitable_bed_kinds (welche Beet-Arten passen) befüllen
+npm run backfill-categories       # plants.categories Sekundär-Kategorien (Apfel→[Obst, Baum]) via Gemini
 npm run set-locations             # Bulk-PLZ-Setup aus scripts/locations.json
 ```
 

@@ -6,7 +6,16 @@ import Image from 'next/image'
 import type { Plant } from '@/lib/supabase'
 import { addToGarden, removeFromGarden } from './actions'
 
-const CATEGORIES = ['Alle', 'Gemüse', 'Kraut', 'Blume', 'Obst'] as const
+const CATEGORIES = [
+  'Alle',
+  'Gemüse',
+  'Kraut',
+  'Blume',
+  'Obst',
+  'Baum',
+  'Strauch',
+  'Nuss',
+] as const
 type Category = (typeof CATEGORIES)[number]
 
 function categoryColor(cat: string): string {
@@ -15,8 +24,21 @@ function categoryColor(cat: string): string {
     case 'Kraut': return '#C17B5C'
     case 'Blume': return '#8B5A95'
     case 'Obst': return '#D49C3D'
+    case 'Baum': return '#5C7C4A'
+    case 'Strauch': return '#8FA376'
+    case 'Nuss': return '#A37D5C'
     default: return '#888780'
   }
+}
+
+function plantMatchesCategory(p: Plant, category: Category): boolean {
+  if (category === 'Alle') return true
+  // Multi-cat lookup with legacy fallback for plants whose array hasn't
+  // been backfilled yet (categories === null).
+  if (p.categories && p.categories.length > 0) {
+    return p.categories.includes(category)
+  }
+  return p.category === category
 }
 
 type Props = {
@@ -36,7 +58,7 @@ export default function SearchFilter({ plants, inGardenIds }: Props) {
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
     return plants.filter((p) => {
-      if (category !== 'Alle' && p.category !== category) return false
+      if (!plantMatchesCategory(p, category)) return false
       if (!q) return true
       return (
         p.name.toLowerCase().includes(q) ||
@@ -77,7 +99,7 @@ export default function SearchFilter({ plants, inGardenIds }: Props) {
           className="w-full px-4 py-3 rounded-xl border bg-white text-base focus:outline-none min-h-[48px]"
           style={{ borderColor: '#E8E6DF', color: '#2C2C2A' }}
         />
-        <div className="flex gap-2 overflow-x-auto pb-1">
+        <div className="flex flex-wrap gap-2">
           {CATEGORIES.map((cat) => {
             const active = cat === category
             return (

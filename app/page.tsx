@@ -21,6 +21,9 @@ function categoryColor(cat: string): string {
     case 'Kraut': return '#C17B5C'
     case 'Blume': return '#8B5A95'
     case 'Obst': return '#D49C3D'
+    case 'Baum': return '#5C7C4A'
+    case 'Strauch': return '#8FA376'
+    case 'Nuss': return '#A37D5C'
     default: return '#888780'
   }
 }

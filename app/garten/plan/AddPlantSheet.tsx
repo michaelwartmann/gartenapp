@@ -14,6 +14,7 @@ import type { RotationAdvice } from '@/lib/recommendRotation'
 type Props = {
   bedId: string
   bedLabel: string
+  bedKind?: string
   season: AddPlantingSeason
   onClose: () => void
 }
@@ -23,6 +24,9 @@ const CATEGORY_BG: Record<string, string> = {
   Kraut: '#C17B5C',
   Blume: '#8B5A95',
   Obst: '#D49C3D',
+  Baum: '#5C7C4A',
+  Strauch: '#8FA376',
+  Nuss: '#A37D5C',
 }
 
 function statusBadge(s: GardenStatus): { bg: string; fg: string; label: string } {
@@ -49,12 +53,14 @@ function verdictPill(v: RotationAdvice['verdict']) {
 export default function AddPlantSheet({
   bedId,
   bedLabel,
+  bedKind,
   season,
   onClose,
 }: Props) {
   const [plants, setPlants] = useState<AvailablePlant[] | null>(null)
   const [query, setQuery] = useState('')
   const [hideOthers, setHideOthers] = useState(true)
+  const [onlyFitting, setOnlyFitting] = useState(false)
   const [selected, setSelected] = useState<AvailablePlant | null>(null)
   const [advice, setAdvice] = useState<RotationAdvice | null>(null)
   const [adviceLoading, setAdviceLoading] = useState(false)
@@ -62,6 +68,14 @@ export default function AddPlantSheet({
   const [error, setError] = useState<string | null>(null)
 
   const isLastYear = season === 'last_year'
+
+  function plantFits(p: AvailablePlant): 'fit' | 'misfit' | 'unknown' {
+    if (!bedKind) return 'unknown'
+    if (!p.suitable_bed_kinds || p.suitable_bed_kinds.length === 0) {
+      return 'unknown'
+    }
+    return p.suitable_bed_kinds.includes(bedKind) ? 'fit' : 'misfit'
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -109,12 +123,26 @@ export default function AddPlantSheet({
     } else if (hideOthers && !isLastYear) {
       list = list.filter((p) => p.gardenStatus !== 'none')
     }
+    if (onlyFitting && bedKind && !isLastYear) {
+      list = list.filter((p) => plantFits(p) !== 'misfit')
+    }
+    function fitRank(p: AvailablePlant): number {
+      const f = plantFits(p)
+      if (f === 'fit') return 0
+      if (f === 'unknown') return 1
+      return 2 // misfit
+    }
     return [...list].sort((a, b) => {
+      if (bedKind && !isLastYear) {
+        const rf = fitRank(a) - fitRank(b)
+        if (rf !== 0) return rf
+      }
       const r = statusRank(a.gardenStatus) - statusRank(b.gardenStatus)
       if (r !== 0) return r
       return a.name.localeCompare(b.name, 'de')
     })
-  }, [plants, query, hideOthers, isLastYear])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [plants, query, hideOthers, isLastYear, bedKind, onlyFitting])
 
   function confirmAdd() {
     if (!selected) return
@@ -280,15 +308,28 @@ export default function AddPlantSheet({
                 autoFocus
               />
               {!isLastYear && !query.trim() && (
-                <button
-                  onClick={() => setHideOthers((v) => !v)}
-                  className="text-xs underline touch-manipulation"
-                  style={{ color: '#888780' }}
-                >
-                  {hideOthers
-                    ? 'Auch Pflanzen aus dem Katalog zeigen'
-                    : 'Nur meine Samen + Garten zeigen'}
-                </button>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <button
+                    onClick={() => setHideOthers((v) => !v)}
+                    className="text-xs underline touch-manipulation"
+                    style={{ color: '#888780' }}
+                  >
+                    {hideOthers
+                      ? 'Auch Pflanzen aus dem Katalog zeigen'
+                      : 'Nur meine Samen + Garten zeigen'}
+                  </button>
+                  {bedKind && (
+                    <button
+                      onClick={() => setOnlyFitting((v) => !v)}
+                      className="text-xs underline touch-manipulation"
+                      style={{ color: '#888780' }}
+                    >
+                      {onlyFitting
+                        ? 'Auch unübliche zeigen'
+                        : 'Nur passende anzeigen'}
+                    </button>
+                  )}
+                </div>
               )}
             </div>
             <div className="overflow-y-auto flex-1 px-4 pb-4">
@@ -310,12 +351,16 @@ export default function AddPlantSheet({
                 <div className="space-y-2">
                   {filtered.map((p) => {
                     const badge = statusBadge(p.gardenStatus)
+                    const fit = plantFits(p)
                     return (
                       <button
                         key={p.id}
                         onClick={() => setSelected(p)}
                         className="w-full flex items-center gap-3 p-3 rounded-lg border bg-white touch-manipulation"
-                        style={{ borderColor: '#E8E6DF' }}
+                        style={{
+                          borderColor: '#E8E6DF',
+                          opacity: bedKind && fit === 'misfit' ? 0.65 : 1,
+                        }}
                       >
                         <div
                           className="w-10 h-10 rounded-md flex items-center justify-center text-lg shrink-0"
@@ -340,15 +385,29 @@ export default function AddPlantSheet({
                             {p.category}
                           </p>
                         </div>
-                        <span
-                          className="text-[10px] font-medium rounded px-2 py-1 whitespace-nowrap shrink-0"
-                          style={{
-                            backgroundColor: badge.bg,
-                            color: badge.fg,
-                          }}
-                        >
-                          {badge.label}
-                        </span>
+                        <div className="flex flex-col items-end gap-1 shrink-0">
+                          <span
+                            className="text-[10px] font-medium rounded px-2 py-1 whitespace-nowrap"
+                            style={{
+                              backgroundColor: badge.bg,
+                              color: badge.fg,
+                            }}
+                          >
+                            {badge.label}
+                          </span>
+                          {bedKind && !isLastYear && fit !== 'unknown' && (
+                            <span
+                              className="text-[10px] font-medium rounded px-2 py-0.5 whitespace-nowrap"
+                              style={{
+                                backgroundColor:
+                                  fit === 'fit' ? '#E8F1EA' : '#F0EFEA',
+                                color: fit === 'fit' ? '#4A7C59' : '#888780',
+                              }}
+                            >
+                              {fit === 'fit' ? '✓ passt' : '⚠ unüblich'}
+                            </span>
+                          )}
+                        </div>
                       </button>
                     )
                   })}

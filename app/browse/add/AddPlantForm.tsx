@@ -1,7 +1,7 @@
 'use client'
 
-import { useActionState, useEffect, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useActionState, useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { createPlantAndAdd, type CreateResult } from './actions'
 
 const CATEGORIES = [
@@ -9,13 +9,29 @@ const CATEGORIES = [
   { value: 'Kraut', color: '#C17B5C' },
   { value: 'Blume', color: '#8B5A95' },
   { value: 'Obst', color: '#D49C3D' },
+  { value: 'Baum', color: '#5C7C4A' },
+  { value: 'Strauch', color: '#8FA376' },
+  { value: 'Nuss', color: '#A37D5C' },
 ] as const
 
-export default function AddPlantForm() {
-  const router = useRouter()
+type Props = {
+  /** Called when the server action returns ok=true. The parent decides what
+   *  happens next (typically: show AssignBedSheet, then redirect). */
+  onSuccess: (result: Extract<CreateResult, { ok: true }>) => void
+}
+
+export default function AddPlantForm({ onSuccess }: Props) {
   const searchParams = useSearchParams()
   const prefilledName = searchParams.get('name') ?? ''
-  const [category, setCategory] = useState<string>(CATEGORIES[0].value)
+  // Keep insertion order so the *first* picked category is the primary
+  // (used for the colored display-pill on plant detail).
+  const [categoryOrder, setCategoryOrder] = useState<string[]>([
+    CATEGORIES[0].value,
+  ])
+  const selectedSet = useMemo(() => new Set(categoryOrder), [categoryOrder])
+  const primary = categoryOrder[0] ?? CATEGORIES[0].value
+  const categoriesCSV = categoryOrder.join(',')
+
   const [state, formAction, pending] = useActionState<CreateResult | null, FormData>(
     async (_prev, formData) => createPlantAndAdd(_prev, formData),
     null
@@ -23,14 +39,25 @@ export default function AddPlantForm() {
 
   useEffect(() => {
     if (state && 'ok' in state && state.ok) {
-      router.push(`/plants/${state.plantId}${state.deduped ? '' : '?fresh=1'}`)
+      onSuccess(state)
     }
-  }, [state, router])
+  }, [state, onSuccess])
+
+  function toggle(cat: string) {
+    setCategoryOrder((cur) => {
+      if (cur.includes(cat)) {
+        const next = cur.filter((c) => c !== cat)
+        // Always keep at least one; if the user toggles off the last, restore it.
+        return next.length === 0 ? cur : next
+      }
+      return [...cur, cat]
+    })
+  }
 
   const errorMessage =
     state && 'error' in state
       ? state.error === 'invalid'
-        ? 'Bitte Name und Kategorie ausfüllen.'
+        ? 'Bitte Name und mindestens eine Kategorie ausfüllen.'
         : state.error === 'no-garden'
           ? 'Garten nicht gefunden — bitte neu anmelden.'
           : 'Ups — etwas ist schiefgelaufen. Bitte nochmal.'
@@ -40,7 +67,8 @@ export default function AddPlantForm() {
 
   return (
     <form action={formAction} className="space-y-6">
-      <input type="hidden" name="category" value={category} />
+      <input type="hidden" name="category" value={primary} />
+      <input type="hidden" name="categories" value={categoriesCSV} />
 
       <div className="space-y-2">
         <label
@@ -90,22 +118,30 @@ export default function AddPlantForm() {
         >
           Kategorie *
         </label>
-        <div className="grid grid-cols-2 gap-2">
+        <p className="text-xs leading-snug" style={{ color: '#888780' }}>
+          Mehrfach möglich. Die zuerst gewählte ist die Primär-Kategorie für
+          Farbe und Anzeige.
+        </p>
+        <div className="grid grid-cols-3 gap-2">
           {CATEGORIES.map((cat) => {
-            const active = cat.value === category
+            const active = selectedSet.has(cat.value)
+            const isPrimary = active && cat.value === primary
             return (
               <button
                 key={cat.value}
                 type="button"
-                onClick={() => setCategory(cat.value)}
-                className="p-4 rounded-lg border text-sm font-medium min-h-[48px] touch-manipulation"
+                onClick={() => toggle(cat.value)}
+                className="p-3 rounded-lg border text-sm font-medium min-h-[48px] touch-manipulation flex items-center justify-center gap-1"
                 style={{
                   backgroundColor: active ? cat.color : '#FFFFFF',
                   color: active ? '#FFFFFF' : '#2C2C2A',
                   borderColor: active ? cat.color : '#E8E6DF',
                 }}
               >
-                {cat.value}
+                <span>{cat.value}</span>
+                {isPrimary && categoryOrder.length > 1 && (
+                  <span className="text-[10px] opacity-80">★</span>
+                )}
               </button>
             )
           })}
@@ -131,7 +167,7 @@ export default function AddPlantForm() {
 
       <button
         type="submit"
-        disabled={pending || !!submitted}
+        disabled={pending || !!submitted || categoryOrder.length === 0}
         className="w-full py-4 rounded-xl text-white text-base font-medium min-h-[48px] touch-manipulation disabled:opacity-60"
         style={{ backgroundColor: '#4A7C59' }}
       >

@@ -14,11 +14,14 @@ import {
 } from './actions'
 import {
   listBedsContainingPlant,
+  listBedsForGarden,
   markBedPlantingAsPlanted,
   markBedPlantingAsNotPlanted,
   updateBedPlantingDate,
   type BedForPlant,
 } from '@/app/garten/plan/actions'
+import AssignBedSheet from '@/app/garten/plan/AssignBedSheet'
+import { bedKindIcon, bedKindLabel } from '@/lib/bedKinds'
 
 function formatISODate(iso: string | null): string {
   if (!iso) return ''
@@ -68,6 +71,9 @@ function getCategoryColor(category: string) {
     case 'Kraut': return '#C17B5C'
     case 'Blume': return '#8B5A95'
     case 'Obst': return '#D49C3D'
+    case 'Baum': return '#5C7C4A'
+    case 'Strauch': return '#8FA376'
+    case 'Nuss': return '#A37D5C'
     default: return '#888780'
   }
 }
@@ -85,6 +91,8 @@ export default function PlantDetailPage({ params }: { params: Promise<{ id: stri
   const [plantedDateDraft, setPlantedDateDraft] = useState('')
   const [plantedPending, startPlantedTransition] = useTransition()
   const [bedsForPlant, setBedsForPlant] = useState<BedForPlant[]>([])
+  const [bedCount, setBedCount] = useState<number>(0)
+  const [assignSheetOpen, setAssignSheetOpen] = useState(false)
   const [editingBedDateId, setEditingBedDateId] = useState<string | null>(null)
   const [bedDateDraft, setBedDateDraft] = useState('')
   const [busyBedId, setBusyBedId] = useState<string | null>(null)
@@ -109,6 +117,9 @@ export default function PlantDetailPage({ params }: { params: Promise<{ id: stri
         setPlant(res.plant)
         setGardenPlant(res.gardenPlant)
         listBedsContainingPlant(id).then(setBedsForPlant).catch(() => {})
+        listBedsForGarden()
+          .then((views) => setBedCount(views.length))
+          .catch(() => {})
       } catch (err) {
         console.error('Error loading plant data:', err)
         setError(err instanceof Error ? err.message : 'Failed to load plant data')
@@ -134,12 +145,25 @@ export default function PlantDetailPage({ params }: { params: Promise<{ id: stri
 
   const handleMarkPlanted = () => {
     if (!gardenPlant) return
+    // If the user has beds set up, ask "where?" first — the bed-derived
+    // global state then lights up Mein Garten via deriveGlobalPlantedAt.
+    if (bedCount > 0) {
+      setAssignSheetOpen(true)
+      return
+    }
     startPlantedTransition(async () => {
       const res = await markAsPlanted(gardenPlant.id)
       if ('ok' in res) {
         setGardenPlant({ ...gardenPlant, planted_at: res.plantedAt })
       }
     })
+  }
+
+  const handleAssignSheetClose = () => {
+    setAssignSheetOpen(false)
+    // The sheet may have created a bed_planting + flipped global planted_at.
+    // Reload everything so the page reflects the new truth.
+    setReloadCounter((c) => c + 1)
   }
 
   const handleStartEditDate = () => {
@@ -366,6 +390,25 @@ export default function PlantDetailPage({ params }: { params: Promise<{ id: stri
           >
             {plant.category}
           </div>
+          {plant.categories &&
+            plant.categories.filter((c) => c !== plant.category).length > 0 && (
+              <div className="mt-2 flex flex-wrap justify-center gap-1.5">
+                {plant.categories
+                  .filter((c) => c !== plant.category)
+                  .map((c) => (
+                    <span
+                      key={c}
+                      className="inline-block px-2 py-0.5 rounded-md text-xs font-medium"
+                      style={{
+                        backgroundColor: getCategoryColor(c) + '22',
+                        color: getCategoryColor(c),
+                      }}
+                    >
+                      auch {c}
+                    </span>
+                  ))}
+              </div>
+            )}
         </div>
 
         {/* Gepflanzt state — fast path for plants without bed entries.
@@ -469,14 +512,7 @@ export default function PlantDetailPage({ params }: { params: Promise<{ id: stri
             <div className="space-y-2">
               {bedsForPlant.map((b) => {
                 const planted = !!b.plantedAt
-                const icon =
-                  b.bedKind === 'hochbeet'
-                    ? '📦'
-                    : b.bedKind === 'gewaechshaus'
-                    ? '🏠'
-                    : b.bedKind === 'topf'
-                    ? '🪴'
-                    : '🟫'
+                const icon = bedKindIcon(b.bedKind)
                 const isEditing = editingBedDateId === b.plantingId
                 const busy = busyBedId === b.plantingId
                 return (
@@ -576,6 +612,34 @@ export default function PlantDetailPage({ params }: { params: Promise<{ id: stri
           </div>
         )}
 
+        {/* Passt zu — which bed kinds suit this plant.
+            Read-only chip-row. Empty when Gemini hasn't filled it yet. */}
+        {plant.suitable_bed_kinds && plant.suitable_bed_kinds.length > 0 && (
+          <div className="mb-6">
+            <h2
+              className="text-xs font-medium uppercase tracking-wide mb-2"
+              style={{ color: '#888780' }}
+            >
+              🌿 Passt zu
+            </h2>
+            <div className="flex flex-wrap gap-2">
+              {plant.suitable_bed_kinds.map((k) => (
+                <span
+                  key={k}
+                  className="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs"
+                  style={{
+                    backgroundColor: '#F0EFEA',
+                    color: '#2C2C2A',
+                  }}
+                >
+                  <span className="text-base leading-none">{bedKindIcon(k)}</span>
+                  <span>{bedKindLabel(k)}</span>
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Fields header with edit-mode toggle.
             Default = read-only so scrolling never gets hijacked into an
             edit. Tap "Bearbeiten" to make all fields tappable. */}
@@ -670,6 +734,15 @@ export default function PlantDetailPage({ params }: { params: Promise<{ id: stri
           })}
         </div>
       </div>
+
+      {assignSheetOpen && plant && (
+        <AssignBedSheet
+          plantId={plant.id}
+          plantName={plant.name}
+          suitableBedKinds={plant.suitable_bed_kinds}
+          onClose={handleAssignSheetClose}
+        />
+      )}
     </div>
   )
 }

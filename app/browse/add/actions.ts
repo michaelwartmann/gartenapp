@@ -14,10 +14,31 @@ function adminClient() {
   )
 }
 
-const CATEGORIES = ['Gemüse', 'Kraut', 'Blume', 'Obst'] as const
+const CATEGORIES = [
+  'Gemüse',
+  'Kraut',
+  'Blume',
+  'Obst',
+  'Baum',
+  'Strauch',
+  'Nuss',
+] as const
 
 export type CreateResult =
-  | { ok: true; plantId: string; deduped: boolean }
+  | {
+      ok: true
+      plantId: string
+      plantName: string
+      category: string
+      categories: string[]
+      /**
+       * Suitable bed kinds known *at submission time*. For freshly created
+       * plants this is null — Gemini enrichment runs in the background. The
+       * post-submit AssignBedSheet uses null to mean "show all beds neutrally".
+       */
+      suitableBedKinds: string[] | null
+      deduped: boolean
+    }
   | { error: 'no-garden' | 'invalid' | 'server' }
 
 export async function createPlantAndAdd(
@@ -27,10 +48,30 @@ export async function createPlantAndAdd(
   const name = String(formData.get('name') ?? '').trim()
   const latinName = String(formData.get('latin_name') ?? '').trim()
   const category = String(formData.get('category') ?? '').trim()
+  const categoriesRaw = String(formData.get('categories') ?? '').trim()
 
   if (!name || name.length > 80) return { error: 'invalid' }
   if (latinName.length > 80) return { error: 'invalid' }
   if (!(CATEGORIES as readonly string[]).includes(category)) {
+    return { error: 'invalid' }
+  }
+
+  // Parse multi-cat list. Must contain primary, all values valid, dedupe.
+  const validCats = CATEGORIES as readonly string[]
+  const rawList = categoriesRaw
+    ? categoriesRaw.split(',').map((c) => c.trim()).filter(Boolean)
+    : []
+  const seen = new Set<string>()
+  const categories: string[] = []
+  for (const c of rawList) {
+    if (!validCats.includes(c)) continue
+    if (seen.has(c)) continue
+    seen.add(c)
+    categories.push(c)
+  }
+  // Always ensure primary is in the array, at front.
+  if (!categories.includes(category)) categories.unshift(category)
+  if (categories.length === 0 || categories.length > 7) {
     return { error: 'invalid' }
   }
 
@@ -43,10 +84,16 @@ export async function createPlantAndAdd(
   // that also matches the (optional) user-provided latin name.
   const { data: matches } = await supabase
     .from('plants')
-    .select('id, latin_name')
+    .select('id, latin_name, suitable_bed_kinds, categories, category')
     .ilike('name', name)
 
-  let existing: { id: string; latin_name: string | null } | null = null
+  let existing: {
+    id: string
+    latin_name: string | null
+    suitable_bed_kinds: string[] | null
+    categories: string[] | null
+    category: string
+  } | null = null
   if (matches && matches.length > 0) {
     if (latinName) {
       existing =
@@ -60,10 +107,20 @@ export async function createPlantAndAdd(
 
   let plantId: string
   let isNew: boolean
+  let suitableBedKinds: string[] | null = null
+  // Effective categories returned in the result. For deduped plants we
+  // honor the catalog truth (so other gardeners see consistent data); for
+  // new plants we use the user's pick.
+  let effectiveCategories: string[] = categories
 
   if (existing) {
     plantId = existing.id
     isNew = false
+    suitableBedKinds = existing.suitable_bed_kinds
+    effectiveCategories =
+      existing.categories && existing.categories.length > 0
+        ? existing.categories
+        : [existing.category]
   } else {
     const { data: inserted, error: insertError } = await supabase
       .from('plants')
@@ -71,6 +128,7 @@ export async function createPlantAndAdd(
         name,
         latin_name: latinName,
         category,
+        categories,
       })
       .select('id')
       .single()
@@ -100,11 +158,27 @@ export async function createPlantAndAdd(
           latin_name: latinName || undefined,
           category,
         })
-        const update: Record<string, string> = {}
+        const update: Record<string, string | string[]> = {}
         for (const key of FIELD_KEYS) {
           if (key === 'latin_name' && latinName) continue
           const value = enriched[key]
           if (value) update[key] = value
+        }
+        if (enriched.suitable_bed_kinds.length > 0) {
+          update.suitable_bed_kinds = enriched.suitable_bed_kinds
+        }
+        // Merge Gemini's category suggestions with the user's pick.
+        // Primary stays at index 0 (user's first pick); we append any
+        // Gemini-suggested cats not already present, capped at 3 total.
+        if (enriched.categories.length > 0) {
+          const merged: string[] = [...categories]
+          for (const c of enriched.categories) {
+            if (merged.length >= 3) break
+            if (!merged.includes(c)) merged.push(c)
+          }
+          if (merged.length > categories.length) {
+            update.categories = merged
+          }
         }
         if (Object.keys(update).length > 0) {
           const { error: updErr } = await bgSupabase
@@ -143,5 +217,13 @@ export async function createPlantAndAdd(
   revalidatePath('/')
   revalidatePath('/browse')
 
-  return { ok: true, plantId, deduped: !isNew }
+  return {
+    ok: true,
+    plantId,
+    plantName: name,
+    category: effectiveCategories[0] ?? category,
+    categories: effectiveCategories,
+    suitableBedKinds,
+    deduped: !isNew,
+  }
 }
