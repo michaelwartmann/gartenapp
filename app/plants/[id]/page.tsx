@@ -3,6 +3,7 @@
 import { useState, useEffect, use, useTransition } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Image from 'next/image'
+import Link from 'next/link'
 import type { Plant, GardenPlant } from '@/lib/supabase'
 import {
   markAsPlanted,
@@ -11,12 +12,35 @@ import {
   loadPlantWithOverrides,
   saveFieldOverride,
 } from './actions'
+import {
+  listBedsContainingPlant,
+  markBedPlantingAsPlanted,
+  markBedPlantingAsNotPlanted,
+  updateBedPlantingDate,
+  type BedForPlant,
+} from '@/app/garten/plan/actions'
 
 function formatISODate(iso: string | null): string {
   if (!iso) return ''
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso)
   if (!m) return iso
   return `${m[3]}.${m[2]}.${m[1]}`
+}
+
+function formatAge(iso: string | null): string {
+  if (!iso) return ''
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso)
+  if (!m) return ''
+  const planted = new Date(`${m[1]}-${m[2]}-${m[3]}T00:00:00Z`).getTime()
+  const today = Date.now()
+  const days = Math.max(0, Math.floor((today - planted) / 86_400_000))
+  if (days === 0) return 'heute gepflanzt'
+  if (days === 1) return '1 Tag alt'
+  if (days < 14) return `${days} Tage alt`
+  const weeks = Math.floor(days / 7)
+  if (weeks < 52) return `${weeks} Wochen alt`
+  const years = Math.floor(days / 365)
+  return years === 1 ? '1 Jahr alt' : `${years} Jahre alt`
 }
 
 const fieldLabels = {
@@ -59,6 +83,11 @@ export default function PlantDetailPage({ params }: { params: Promise<{ id: stri
   const [editingPlantedDate, setEditingPlantedDate] = useState(false)
   const [plantedDateDraft, setPlantedDateDraft] = useState('')
   const [plantedPending, startPlantedTransition] = useTransition()
+  const [bedsForPlant, setBedsForPlant] = useState<BedForPlant[]>([])
+  const [editingBedDateId, setEditingBedDateId] = useState<string | null>(null)
+  const [bedDateDraft, setBedDateDraft] = useState('')
+  const [busyBedId, setBusyBedId] = useState<string | null>(null)
+  const [bedPending, startBedTransition] = useTransition()
   const router = useRouter()
   const searchParams = useSearchParams()
   const fresh = searchParams.get('fresh') === '1'
@@ -78,6 +107,7 @@ export default function PlantDetailPage({ params }: { params: Promise<{ id: stri
         }
         setPlant(res.plant)
         setGardenPlant(res.gardenPlant)
+        listBedsContainingPlant(id).then(setBedsForPlant).catch(() => {})
       } catch (err) {
         console.error('Error loading plant data:', err)
         setError(err instanceof Error ? err.message : 'Failed to load plant data')
@@ -136,6 +166,53 @@ export default function PlantDetailPage({ params }: { params: Promise<{ id: stri
         setEditingPlantedDate(false)
       }
     })
+  }
+
+  async function reloadBeds() {
+    try {
+      const fresh = await listBedsContainingPlant(id)
+      setBedsForPlant(fresh)
+    } catch {}
+    // Also pull garden_plants again so the Mein-Garten-derived state stays
+    // in sync when the global planted_at flips after a bed action.
+    setReloadCounter((c) => c + 1)
+  }
+
+  const handleToggleBed = (b: BedForPlant) => {
+    setBusyBedId(b.plantingId)
+    startBedTransition(async () => {
+      const res = b.plantedAt
+        ? await markBedPlantingAsNotPlanted(b.plantingId)
+        : await markBedPlantingAsPlanted(b.plantingId)
+      if ('ok' in res) {
+        await reloadBeds()
+      }
+      setBusyBedId(null)
+    })
+  }
+
+  const handleStartEditBedDate = (b: BedForPlant) => {
+    setEditingBedDateId(b.plantingId)
+    setBedDateDraft(b.plantedAt ?? '')
+  }
+
+  const handleSaveBedDate = (b: BedForPlant) => {
+    if (!bedDateDraft) return
+    setBusyBedId(b.plantingId)
+    startBedTransition(async () => {
+      const res = await updateBedPlantingDate(b.plantingId, bedDateDraft)
+      if ('ok' in res) {
+        setEditingBedDateId(null)
+        setBedDateDraft('')
+        await reloadBeds()
+      }
+      setBusyBedId(null)
+    })
+  }
+
+  const handleCancelBedDate = () => {
+    setEditingBedDateId(null)
+    setBedDateDraft('')
   }
 
   const handleFieldClick = (field: string, currentValue: string) => {
@@ -290,8 +367,10 @@ export default function PlantDetailPage({ params }: { params: Promise<{ id: stri
           </div>
         </div>
 
-        {/* Gepflanzt state (only when plant is in the user's garden) */}
-        {gardenPlant && (
+        {/* Gepflanzt state — fast path for plants without bed entries.
+            When the plant is in ≥1 beds, the Im-Plan section below is the
+            canonical control surface and the global state is derived. */}
+        {gardenPlant && bedsForPlant.length === 0 && (
           <div className="mb-6">
             {!gardenPlant.planted_at ? (
               <button
@@ -360,6 +439,139 @@ export default function PlantDetailPage({ params }: { params: Promise<{ id: stri
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Im Garten seit — global age, derived from earliest bed planted_at */}
+        {bedsForPlant.length > 0 && gardenPlant?.planted_at && (
+          <div
+            className="mb-4 rounded-xl px-4 py-3 text-sm"
+            style={{ backgroundColor: '#F0EDE4', color: '#4A7C59' }}
+          >
+            🌱 Im Garten seit{' '}
+            <span style={{ fontWeight: 500 }}>
+              {formatISODate(gardenPlant.planted_at)}
+            </span>{' '}
+            · {formatAge(gardenPlant.planted_at)}
+          </div>
+        )}
+
+        {/* Im Plan — interactive per-bed planted state */}
+        {bedsForPlant.length > 0 && (
+          <div className="mb-6">
+            <h2
+              className="text-xs font-medium uppercase tracking-wide mb-2"
+              style={{ color: '#888780' }}
+            >
+              🗺️ Im Plan
+            </h2>
+            <div className="space-y-2">
+              {bedsForPlant.map((b) => {
+                const planted = !!b.plantedAt
+                const icon =
+                  b.bedKind === 'hochbeet'
+                    ? '📦'
+                    : b.bedKind === 'gewaechshaus'
+                    ? '🏠'
+                    : b.bedKind === 'topf'
+                    ? '🪴'
+                    : '🟫'
+                const isEditing = editingBedDateId === b.plantingId
+                const busy = busyBedId === b.plantingId
+                return (
+                  <div
+                    key={b.plantingId}
+                    className="rounded-lg border bg-white p-3"
+                    style={{ borderColor: '#E8E6DF', opacity: busy ? 0.7 : 1 }}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="text-xl shrink-0">{icon}</span>
+                      <div className="min-w-0 flex-1">
+                        <Link
+                          href="/garten/plan"
+                          className="text-sm font-medium leading-tight truncate block"
+                          style={{ color: '#2C2C2A' }}
+                        >
+                          {b.bedLabel}
+                        </Link>
+                        {!isEditing && (
+                          <p
+                            className="text-xs leading-tight mt-0.5"
+                            style={{ color: planted ? '#4A7C59' : '#888780' }}
+                          >
+                            {planted ? (
+                              <>
+                                gepflanzt seit {formatISODate(b.plantedAt)}
+                                {' · '}
+                                <button
+                                  onClick={() => handleStartEditBedDate(b)}
+                                  disabled={bedPending}
+                                  className="underline disabled:opacity-60"
+                                  style={{ color: '#888780' }}
+                                >
+                                  Datum ändern
+                                </button>
+                              </>
+                            ) : (
+                              'geplant'
+                            )}
+                          </p>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => handleToggleBed(b)}
+                        disabled={busy || bedPending}
+                        className="w-9 h-9 rounded-full flex items-center justify-center text-base touch-none disabled:opacity-60 shrink-0"
+                        style={{
+                          backgroundColor: planted ? '#4A7C59' : 'transparent',
+                          color: planted ? '#FFFFFF' : '#888780',
+                          border: planted
+                            ? 'none'
+                            : '1.5px solid #C8C5BA',
+                        }}
+                        aria-label={
+                          planted
+                            ? 'Als geplant markieren'
+                            : 'Als gepflanzt markieren'
+                        }
+                      >
+                        {planted ? '✓' : ''}
+                      </button>
+                    </div>
+                    {isEditing && (
+                      <div className="space-y-2 mt-3">
+                        <input
+                          type="date"
+                          value={bedDateDraft}
+                          onChange={(e) => setBedDateDraft(e.target.value)}
+                          className="w-full px-3 py-2 rounded-lg border bg-white text-sm min-h-[44px]"
+                          style={{ borderColor: '#E8E6DF', color: '#2C2C2A' }}
+                          autoFocus
+                        />
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleSaveBedDate(b)}
+                            disabled={busy || !bedDateDraft}
+                            className="flex-1 px-3 py-2 rounded-lg text-white text-sm font-medium min-h-[40px] touch-none disabled:opacity-60"
+                            style={{ backgroundColor: '#4A7C59' }}
+                          >
+                            {busy ? '…' : 'Speichern'}
+                          </button>
+                          <button
+                            onClick={handleCancelBedDate}
+                            disabled={busy}
+                            className="flex-1 px-3 py-2 rounded-lg text-sm font-medium border min-h-[40px] touch-none"
+                            style={{ borderColor: '#E8E6DF', color: '#888780' }}
+                          >
+                            Abbrechen
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
           </div>
         )}
 

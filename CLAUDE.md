@@ -23,15 +23,17 @@ A digital plant companion inspired by Kim's physical plant card album. Mobile-fi
 ## 🎯 Current State
 
 ### ✅ Features Complete
-- **115-plant catalog** with 16 German botanical fields each — seeded from `data/plants.json`
+- **115-plant catalog** with 16 German botanical fields each (+ optional 17th `family` for Fruchtfolge) — seeded from `data/plants.json`
 - **Mein Garten split**: "Im Garten 🌱" (planted) vs "Meine Samen" (interessiert), per user
 - **"Diese Woche"** time-aware tasks per planted plant on Mein Garten — Gemini 2.5 Flash-Lite, cached daily on `gardens.weekly_tasks_cache` (JSONB) + `weekly_tasks_cache_date`, invalidated on every Gepflanzt/Datum-ändern/Nicht-mehr-gepflanzt action
 - **"Was kann ich pflanzen?"** — Gemini 2.5 Flash-Lite advisor at `/empfehlungen` with idea/verdict block + suggestions + companion-conflict filter
+- **Garten-Plan** (`/garten/plan`): Beete pro Garten, Pflanzen pro Beet pro Saison, Vorjahre-Anzeige, Fruchtfolge-Tipp via Gemini 2.5 Flash-Lite (mit deterministischem Companion-Pre-Filter) beim "+ Pflanze hinzufügen"
 - **Per-garden passwords**: first-login setup, forgot-password via Resend email to admin, 10-min reset-token dedup poka-yoke
 - **Gepflanzt / Nicht mehr gepflanzt**: toggle `planted_at DATE` on plant detail
 - **Manual plant + Gemini autofill** (`/browse/add`): fills the 16 fields + kawaii illustration in the background
 - **On-demand kawaii image generation** via `gemini-2.5-flash-image` ("Nano Banana")
 - **PWA installable**: manifest + icons cleared through middleware
+- **RLS enabled, admin-client-only**: alle DB-Reads serverseitig über `supabaseAdmin()`, anon-Key sieht nichts
 
 ### 🔧 Technical Features
 - Mobile-first responsive design (max-width 480px)
@@ -49,7 +51,8 @@ A digital plant companion inspired by Kim's physical plant card album. Mobile-fi
 ### Tables
 ```sql
 -- Core plant data (shared)
-plants: id, name, latin_name, category, illustration_url, [16 botanical fields]
+plants: id, name, latin_name, category, illustration_url, family,
+        [16 botanical fields]
 
 -- Per-garden auth + ownership + weekly-tasks cache
 gardens: id, owner_name, password_hash, reset_token, reset_expires_at,
@@ -58,6 +61,13 @@ gardens: id, owner_name, password_hash, reset_token, reset_expires_at,
 -- Per-garden plant rows: interessiert (planted_at NULL) vs gepflanzt (date set)
 garden_plants: id, garden_id, plant_id, planted_at DATE,
                [16 override fields], notes
+
+-- Stage 5A: persistent beds per garden (x/y/w/h reserved for 5B editor)
+beds: id, garden_id, label, kind, x, y, w, h, created_at
+
+-- Stage 5A: bed history per season (Folgekulturen via multiple rows/year)
+bed_plantings: id, bed_id, plant_id, season_year, planted_at DATE,
+               removed_at DATE, notes
 ```
 
 ### Storage Buckets
@@ -91,6 +101,10 @@ npm run generate-images -- --list-models
 
 # Regenerate all images (e.g. for a style refresh) — overwrites existing
 npm run generate-images -- --all
+
+# Backfill plants.family (Solanaceae, Brassicaceae, …) for Fruchtfolge.
+# Idempotent: only fills WHERE family IS NULL. Pass --all to overwrite.
+npm run backfill-families
 ```
 
 ### Environment Variables
@@ -161,12 +175,15 @@ Stages shipped on top of v1.0:
 - ✅ **Stage 3**: Per-garden passwords, first-login setup flow, forgot-password via Resend email to admin.
 - ✅ **Stage 4A**: "Was kann ich pflanzen?" recommendations via Gemini 2.5 Flash, planted-vs-interessiert split (`garden_plants.planted_at DATE`), "Gepflanzt / Nicht mehr gepflanzt" controls on plant detail, conflict-detection ("Tomaten + Kartoffeln ist heikel") in free-text recommendations.
 - ✅ **Stage 4B**: "Diese Woche" time-aware tasks block at the top of Mein Garten. Gemini 2.5 Flash-Lite reads `(today, planted plants + planted_at + saatzeit/vorzucht/schneiden/ernte)` and returns up to 8 imperative German tasks tagged `jetzt` / `diese_woche` / `demnaechst`. Cached per-garden-per-day on `gardens.weekly_tasks_cache(_date)`; invalidated by `markAsPlanted` / `updatePlantedDate` / `markAsNotPlanted`. Section hides when no planted plants or when Gemini returns zero tasks.
+- ✅ **Security/RLS**: alle Supabase-Reads laufen serverseitig über `supabaseAdmin()`; RLS auf allen `public`-Tabellen aktiviert (default-deny für anon-Key).
+- ✅ **Stage 5A**: Garten-Plan unter `/garten/plan`. Beete (`beds`) sind langlebige Container pro Garten, Bepflanzungen (`bed_plantings`) werden pro Saison gespeichert und erlauben Folgekulturen. UI: Beet anlegen, Pflanze über Sheet hinzufügen, Vorjahre als gedimmte Chips. Beim Hinzufügen läuft `recommendRotation` (Gemini 2.5 Flash-Lite + deterministischer Companion-Pre-Filter) und zeigt verdict `gut` / `okay` / `schlecht` mit kurzem Grund. 17. Pflanzenfeld `family` (Solanaceae, Brassicaceae, …) optional — Backfill via `npm run backfill-families`. Schema in `notes/stage-5a-schema.sql`.
 
 Next up:
 
-1. **Stage 4C** (optional) — push notifications / email reminders driven off the same daily-tasks pipeline. Defer until usage signals it adds value.
-2. **Filter/sort** the catalog by any of the 16 botanical dimensions.
-3. **Enhanced mobile UI** — polish and animations.
+1. **Stage 5B** — visueller Beet-Editor (drag/drop auf Skizzenfläche) mit `react-konva` + `@use-gesture/react`. Touch-UX-Risiko früh testen.
+2. **Stage 5C** — Foto-Hintergrund pro Garten (Storage-Subfolder `garden-bg/`, Konva-Image-Layer mit Opazitäts-Slider).
+3. **Stage 4C** (optional) — push notifications / email reminders driven off the daily-tasks pipeline.
+4. **Filter/sort** the catalog by any of the 16 botanical dimensions.
 
 ## 📝 Development Notes
 
