@@ -14,11 +14,13 @@ A digital plant companion inspired by Kim's physical plant card album. Mobile-fi
 
 ## 🏗️ Technical Stack
 
-- **Frontend**: Next.js 16 App Router + TypeScript + Tailwind CSS
-- **Backend**: Supabase (PostgreSQL + Storage)
-- **Auth**: Simple password gate (`Garten2026`)
-- **Deployment**: Vercel (planned)
-- **Domain**: `garten.philia-aletheia.art` (to be configured)
+- **Frontend**: Next.js 16 App Router + TypeScript + Tailwind CSS 4
+- **Backend**: Supabase (PostgreSQL + Storage), RLS aktiviert, alle Reads serverseitig über `supabaseAdmin()`
+- **Auth**: Per-Garten-Passwörter (Stage 3), erstes Login richtet Passwort ein, Forgot-Password über Admin-Email (Resend)
+- **AI**: Gemini 2.5 Flash / Flash-Lite (Empfehlungen, Tasks, Fruchtfolge, Plant-Autofill) + Gemini 2.5 Flash-Image (Kawaii-Illustrationen)
+- **Wetter**: Open-Meteo (Forecast) + Zippopotam (PLZ-Geocoding) für DE/AT/CH/NL
+- **Deployment**: Vercel
+- **Domain**: `garten.philia-aletheia.art` (live)
 
 ## 🎯 Current State
 
@@ -126,9 +128,9 @@ GOOGLE_AI_API_KEY=[your_google_ai_key]
 ## 🚀 Deployment
 
 ### Live
-- **Production**: `https://gartenapp-git-main-mikeio.vercel.app`
-- **Release**: v1.0 (demo release — frozen as git tag `v1.0`)
-- **Custom domain**: `garten.philia-aletheia.art` (planned)
+- **Production**: `https://garten.philia-aletheia.art`
+- **Preview / prototype**: `https://gartenapp-dev.vercel.app`
+- **v1.0**: frozen as git tag `v1.0` (demo release — Stage 1)
 
 ### Local
 - **Dev server**: `http://localhost:3001` (or `:3000`)
@@ -166,31 +168,42 @@ GOOGLE_AI_API_KEY
 
 ## 🔑 Key Decisions Made
 
-1. **Simple Auth**: Password gate instead of user accounts - easier for shared access
-2. **Personal Customization**: garden_plants table stores individual user field overrides
-3. **Mobile-First Design**: 480px max width, large touch targets
-4. **German Botanical Focus**: Authentic German gardening terminology
-5. **Kawaii Aesthetic**: Soft, cute illustrations inspired by Kim's artistic style
-6. **Filename Sanitization**: Handle German special characters for file uploads
-7. **Single Page App**: Simple navigation for all gardening enthusiasts
+1. **Per-Garten-Auth (Stage 3)**: jeder Garten hat eigenes Passwort, kein User-Account-Modell — bewusst leichtgewichtig
+2. **Personal Customization**: `garden_plants` speichert User-Overrides der 16 Felder pro Garten
+3. **Mobile-First**: max-width 480 px, min Touch-Target 44 px, `touch-action: manipulation` (nicht `none`) damit Scroll überall flüssig läuft
+4. **German Botanical Focus**: alle UI-Strings + Daten auf Deutsch, lateinische Pflanzen-Familien als Referenz
+5. **Kawaii Aesthetic**: weiche, niedliche Illustrationen — inspiriert von Kims handgezeichneten Karten
+6. **Filename Sanitization**: ü→u, ö→o, ä→a, ß→ss für Storage-Uploads
+7. **Plan ↔ Mein Garten als eine Wahrheit (Stage 5A.1)**: globaler `garden_plants.planted_at` wird aus den Beeten abgeleitet (MIN aller Bed-Termine), damit umpflanzen das Alter erhält
+8. **Wetter-Schwellen Beaufort-getreu (Stage 6)**: Hinweis vs. Warnung, keine Alarme bei Bft 7 — User sollen nicht freaked-out werden
+9. **RLS + admin-client-only (Security-Fix)**: cookie-basierte Auth + Server-side admin-Client für alle DB-Reads, anon-Key sieht nichts
+10. **Read-Mode default auf Plant Detail**: 16 Felder sind nicht versehentlich tappbar, „✏️ Bearbeiten"-Toggle aktiviert Edit-Modus (iOS-Settings-Pattern)
 
 ## 🎯 v2 Roadmap
 
-Stages shipped on top of v1.0:
+Stages shipped on top of v1.0 — siehe `CHANGELOG.md` für Details:
 
-- ✅ **Stage 2**: Catalog expansion (115 plants), on-demand kawaii image generation, manual-plant + Gemini autofill.
-- ✅ **Stage 3**: Per-garden passwords, first-login setup flow, forgot-password via Resend email to admin.
-- ✅ **Stage 4A**: "Was kann ich pflanzen?" recommendations via Gemini 2.5 Flash, planted-vs-interessiert split (`garden_plants.planted_at DATE`), "Gepflanzt / Nicht mehr gepflanzt" controls on plant detail, conflict-detection ("Tomaten + Kartoffeln ist heikel") in free-text recommendations.
-- ✅ **Stage 4B**: "Diese Woche" time-aware tasks block at the top of Mein Garten. Gemini 2.5 Flash-Lite reads `(today, planted plants + planted_at + saatzeit/vorzucht/schneiden/ernte)` and returns up to 8 imperative German tasks tagged `jetzt` / `diese_woche` / `demnaechst`. Cached per-garden-per-day on `gardens.weekly_tasks_cache(_date)`; invalidated by `markAsPlanted` / `updatePlantedDate` / `markAsNotPlanted`. Section hides when no planted plants or when Gemini returns zero tasks.
-- ✅ **Security/RLS**: alle Supabase-Reads laufen serverseitig über `supabaseAdmin()`; RLS auf allen `public`-Tabellen aktiviert (default-deny für anon-Key).
-- ✅ **Stage 5A**: Garten-Plan unter `/garten/plan`. Beete (`beds`) sind langlebige Container pro Garten, Bepflanzungen (`bed_plantings`) werden pro Saison gespeichert und erlauben Folgekulturen. UI: Beet anlegen, Pflanze über Sheet hinzufügen, Vorjahre als gedimmte Chips. Beim Hinzufügen läuft `recommendRotation` (Gemini 2.5 Flash-Lite + deterministischer Companion-Pre-Filter) und zeigt verdict `gut` / `okay` / `schlecht` mit kurzem Grund. 17. Pflanzenfeld `family` (Solanaceae, Brassicaceae, …) optional — Backfill via `npm run backfill-families`. Schema in `notes/stage-5a-schema.sql`.
+- ✅ **Stage 2** (2026-04-23): 115 Pflanzen, Kawaii-Bildgenerierung, manuelle Pflanze + Gemini-Autofill
+- ✅ **Stage 3** (2026-04-24): Per-Garten-Passwörter, First-Login-Setup, Forgot-Password via Resend
+- ✅ **Stage 4A** (2026-04-24): „Was kann ich pflanzen?" Empfehlungen, planted/interessiert split
+- ✅ **Stage 4B** (2026-04-26): „Diese Woche" zeitnahe Tasks mit Per-Day-Cache
+- ✅ **Security/RLS** (2026-05-01): RLS aktiviert, admin-client-only für Reads
+- ✅ **Stage 5A** (2026-05-01): Garten-Plan mit Beeten, Bepflanzungen pro Saison, Fruchtfolge-Coach via Gemini, 17. Feld `family`
+- ✅ **Stage 5A.1** (2026-05-01): Per-Beet-Pflanztermine als kanonische Wahrheit (Option C), Plan und Mein-Garten synchronisiert, 🌾 Abgeerntet-Polish, Pflanzen-Alter sichtbar
+- ✅ **Stage 6** (2026-05-01): Wetter-Coach mit Beaufort-getreuen Schwellen, Severe-Event-Banner, Wetter-aware „Diese Woche"-Tasks
+- ✅ **Mobile UX-Polish** (2026-05-01): `touch-manipulation` global, Edit-Mode-Toggle auf Plant Detail
 
 Next up:
 
-1. **Stage 5B** — visueller Beet-Editor (drag/drop auf Skizzenfläche) mit `react-konva` + `@use-gesture/react`. Touch-UX-Risiko früh testen.
-2. **Stage 5C** — Foto-Hintergrund pro Garten (Storage-Subfolder `garden-bg/`, Konva-Image-Layer mit Opazitäts-Slider).
-3. **Stage 4C** (optional) — push notifications / email reminders driven off the daily-tasks pipeline.
-4. **Filter/sort** the catalog by any of the 16 botanical dimensions.
+1. **Stage 5A.2** — expliziter „🌱→📦 Umpflanzen"-Knopf (Vorzucht → Hauptbeet) für Februar 2027 wenn Vorzucht-Saison startet.
+2. **Stage 5B** — visueller Beet-Editor (drag/drop auf Skizzenfläche) mit `react-konva` + `@use-gesture/react`. Touch-UX-Risiko früh testen.
+3. **Stage 5C** — Foto-Hintergrund pro Garten (Storage-Subfolder `garden-bg/`, Konva-Image-Layer mit Opazitäts-Slider).
+4. **Stage 4C** (optional) — push notifications / email reminders driven off the daily-tasks pipeline.
+5. **Filter/sort** the catalog by any of the 16 botanical dimensions.
+
+## 🧪 Release-Readiness
+
+Vor jedem Release-Schritt zu echten Gärtnern: `notes/release-readiness-test.md` durchklicken (15 Phasen, ~30 Min) mit einem Wegwerf-Garten (`TestKim` o.ä.). Deckt Login, Empty-State, Wetter-Setup, Pflanzen-Add, Plan, Toggle-State, Vorzucht-Workflow, Companion-Konflikt, Empfehlungen, manuelle Pflanze + Mobile-Scrolling ab.
 
 ## 📝 Development Notes
 

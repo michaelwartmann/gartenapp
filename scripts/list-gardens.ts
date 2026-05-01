@@ -11,7 +11,8 @@ const supabase = createClient(
 async function main() {
   const { data, error } = await supabase
     .from('gardens')
-    .select('owner_name, created_at')
+    .select('owner_name, location_label, zip_code, created_at')
+    .order('created_at', { ascending: true })
     .order('created_at', { ascending: true })
   if (error) {
     console.error(error)

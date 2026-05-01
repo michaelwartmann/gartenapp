@@ -1,0 +1,114 @@
+# Changelog
+
+Alle nennenswerten Änderungen an der Gartenapp, in umgekehrter chronologischer Reihenfolge.
+
+---
+
+## Stage 6 — Wetter-Coach (2026-05-01)
+
+7-Tage-Vorhersage über Open-Meteo + Standort-Geocoding via Zippopotam (DE/AT/CH/NL). Severe-Event-Banner für die nächsten 48 h mit zwei Schweregraden:
+
+- **Hinweis** (sandfarben): warmer Tag (28–32 °C), starker Wind (Bft 7–8, 50–74 km/h), viel Regen (15–30 mm/Tag), Trockenperiode (≥ 5 Tage)
+- **Warnung** (rot): Frost (< 0 °C), Hitze (> 32 °C), Sturm (Bft 9+, ≥ 75 km/h), Starkregen (> 30 mm/Tag oder > 15 mm/h), Gewitter (mit Hagel-Hinweis bei WMO 96/99)
+
+Schwellen sind aligned mit Beaufort-Skala und DWD-Normen — keine Sturm-Warnung mehr bei Bft 7. Banner zeigen Uhrzeit aus den Stunden-Daten wenn punktuell („Sturm morgen ab 14 Uhr").
+
+Die „Diese Woche"-Tasks werden Wetter-aware: das Forecast wird kompakt zusammengefasst und in den Gemini-Prompt gegeben, Tasks lesen sich z.B. „Tomate ausgeizen — Mittwoch Regen, vorher trocken halten."
+
+**Polish im selben Push (2026-05-01):**
+- 47× `touch-none` → `touch-manipulation` global. Verhinderte vorher Scrolling auf jedem Tap-Target.
+- Plant-Detail: 16 Felder default read-only, ein „✏️ Bearbeiten / ✓ Fertig"-Toggle wechselt in den Edit-Modus. iOS-Settings-Pattern.
+
+Files:
+- `lib/weather.ts`, `lib/weatherEvents.ts`, `lib/getWeatherForGarden.ts`
+- `app/wetter/{actions,WeatherSetup,WeatherStrip}.tsx`
+- `lib/weeklyTasks.ts` + `lib/getWeeklyTasks.ts` (Forecast-Integration)
+- `notes/stage-6-schema.sql`, `scripts/set-locations.ts`
+
+---
+
+## Stage 5A.1 — Per-Beet Pflanztermine, Option C (2026-05-01)
+
+Plan und Mein Garten sind jetzt eine Wahrheit. Die Pflanzen-Detail-Seite zeigt für Pflanzen mit Beet-Einträgen die Beete direkt mit per-Beet-Häkchen und per-Beet-Pflanzdatum. Der globale `garden_plants.planted_at` wird aus den Beeten *abgeleitet* (MIN aller Bed-Termine). Pflanzen ohne Beet behalten den einfachen globalen „Gepflanzt"-Knopf als Schnellweg.
+
+- `deriveGlobalPlantedAt`-Helper sammelt alle Bed-Termine, schreibt MIN als globalen Wert, oder NULL wenn alle Beete ○ sind.
+- `updateBedPlantingDate(plantingId, dateISO)` für per-Beet-Korrektur.
+- „🌱 Im Garten seit 15.02.2026 · 11 Wochen alt"-Header — bleibt sichtbar beim Umpflanzen Vorzucht → Hauptbeet, weil MIN das Sa-Datum behält.
+- 🌾 **Abgeerntet**: Chip-Button setzt `removed_at`, Chip wird durchgestrichen + auf 55% gedimmt; ↶ macht es rückgängig. Rotation-Advisor ignoriert abgeerntete Pflanzen für Mischkultur.
+- Mein-Garten-Karten zeigen jetzt eine grüne Beet-Zeile (📦 Hochbeet hinten · +1).
+
+**Deferred zu Stage 5A.2 (geplant Februar 2027):** expliziter „🌱→📦 Umpflanzen"-Knopf für Vorzucht-Workflow. Heute über manuellen Pfad lösbar (🌾 alte Zeile + neuer Eintrag), das Alter bleibt erhalten weil MIN-Logik.
+
+---
+
+## Stage 5A — Garten-Plan mit Beet-Gedächtnis (2026-05-01)
+
+Inspiriert von Kims jährlicher Frühjahrs-Skizze: Beete sind langlebige Container pro Garten, Bepflanzungen werden pro Saison gespeichert, und ein Gemini-Wrapper sagt beim Pflanzen-Hinzufügen *„passt gut / okay / lieber nicht"* mit kurzem Grund.
+
+- Schema: `plants.family TEXT` (17. Feld, optional, für Familien-Rotation), Tabellen `beds` und `bed_plantings` mit `season_year` und `removed_at`.
+- `lib/recommendRotation.ts` — Gemini 2.5 Flash-Lite + deterministischer Companion-Pre-Filter (klare Konflikte vor Gemini abfangen).
+- UI `/garten/plan`: Beet-Karten, Diese-Saison + Letztes-Jahr-Sektion (Scope auf 1 Jahr begrenzt — Best Practice für Fruchtfolge), Plant-Picker mit Status-Badges (📦 Hab Samen / 🌱 Im Garten / 🛒 Kaufe Samen).
+- Pflanze ins Beet planen → automatisch in `garden_plants` (Meine Samen) erzeugt. Bed ✓ → garden_plants zu „gepflanzt" promoviert.
+- `npm run backfill-families` — Skript klassifiziert Pflanzen via Gemini in lateinische Familien.
+
+Files:
+- `lib/recommendRotation.ts`, `scripts/backfill-families.ts`
+- `app/garten/plan/{page,actions,BedCard,AddPlantSheet,AddBedForm}.tsx`
+- `notes/stage-5a-schema.sql`, `notes/stage-5-jahresplanung-fruchtfolge.md`
+
+---
+
+## Security/RLS — admin-client-only (2026-05-01)
+
+Supabase Advisor flagged `rls_disabled_in_public`. RLS aktiviert auf allen `public`-Tabellen. Da unsere Auth cookie-basiert läuft (kein Supabase Auth, `auth.uid()` immer null), passen klassische RLS-Policies nicht. Stattdessen alle DB-Reads serverseitig über `supabaseAdmin()` (Secret Key umgeht RLS). Anon-Key sieht jetzt nichts mehr, inkl. `gardens.password_hash`.
+
+- `lib/supabase.ts`: anon-Client raus, `supabaseAdmin()` factory rein.
+- 3 Read-Sites umgebaut: `app/page.tsx`, `app/browse/page.tsx`, `app/plants/[id]/page.tsx`.
+- Plant Detail Client Component nutzt jetzt Server Actions (`loadPlantWithOverrides`, `saveFieldOverride`) statt direkter Supabase-Calls.
+
+---
+
+## Stage 4B — „Diese Woche" Tasks (2026-04-26)
+
+Time-aware Aufgaben-Block oben in Mein Garten. Gemini 2.5 Flash-Lite liest `(today, planted plants + planted_at + saatzeit/vorzucht/schneiden/ernte)` und liefert bis zu 8 imperative deutsche Aufgaben getaggt `jetzt` / `diese_woche` / `demnaechst`.
+
+Cached pro Garten pro Tag auf `gardens.weekly_tasks_cache(_date)`; invalidiert von `markAsPlanted` / `updatePlantedDate` / `markAsNotPlanted`. Sektion versteckt sich wenn keine Pflanzen oder Gemini leer zurückkommt.
+
+---
+
+## Stage 4A — „Was kann ich pflanzen?" + Planted/Interessiert (2026-04-24)
+
+`/empfehlungen` mit Gemini 2.5 Flash, Idea-Verdict-Block (`good` / `mixed` / `tricky` / `none`) + 5–8 Vorschlägen, jeweils mit Begründung. Companion-Conflict-Filter („Tomate + Kartoffel ist heikel") deterministisch vor Gemini.
+
+`garden_plants.planted_at DATE` führt den Split ein: NULL = „Meine Samen" (interessiert), Datum gesetzt = „Im Garten 🌱" (gepflanzt). Plant Detail bekommt „Gepflanzt / Datum ändern / Nicht mehr gepflanzt"-Knöpfe.
+
+---
+
+## Stage 3 — Per-garden passwords (2026-04-24)
+
+Statt globalem Gartenpasswort: jeder Garten hat eigenen Hash. Erste Login → Setup-Modus für Passwort-Wahl. Forgot-Password-Flow: User gibt Garten-Name ein, Resend mailt Reset-Link an Admin (`michael.wartmann@gmail.com`), Admin leitet weiter. 10-Min-Reset-Token-Dedup-Poka-Yoke verhindert Spam.
+
+`scrypt`-Hash, `crypto.randomBytes` für Tokens. Schema-Erweiterung: `gardens.password_hash`, `reset_token`, `reset_expires_at`.
+
+Manuelle-Pflanze-Flow (`/browse/add`) im selben Cycle: User legt Pflanze mit Name + Kategorie an, Gemini füllt im Hintergrund die 16 Felder + generiert Kawaii-Bild via `gemini-2.5-flash-image`.
+
+---
+
+## Stage 2 — Catalog expansion + kawaii images (2026-04-23)
+
+115 Pflanzen in 4 Batches nachseededt. On-demand Kawaii-Bildgenerierung über `gemini-2.5-flash-image` (Free Tier).
+
+`npm run generate-images` als Backfill-Skript (idempotent, nur missing). PWA-Installierbarkeit durch Middleware-Whitelist für Manifest + Icons.
+
+---
+
+## v1.0 — Demo Release (2026-04-22)
+
+Erstes shippable Demo:
+- 30 Pflanzen mit 16 deutschen Botanik-Feldern
+- Mein-Garten / Browse-Catalog / Plant-Detail
+- Garten-gate Auth (`Garten2026` shared password)
+- Mobile-first, PWA-Manifest, kawaii Header-Bilder
+- Vercel-Deployment unter `garten.philia-aletheia.art`
+
+Frozen als git-tag `v1.0`.
