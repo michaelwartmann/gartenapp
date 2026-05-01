@@ -28,6 +28,7 @@ A digital plant companion inspired by Kim's physical plant card album. Mobile-fi
 - **"Diese Woche"** time-aware tasks per planted plant on Mein Garten — Gemini 2.5 Flash-Lite, cached daily on `gardens.weekly_tasks_cache` (JSONB) + `weekly_tasks_cache_date`, invalidated on every Gepflanzt/Datum-ändern/Nicht-mehr-gepflanzt action
 - **"Was kann ich pflanzen?"** — Gemini 2.5 Flash-Lite advisor at `/empfehlungen` with idea/verdict block + suggestions + companion-conflict filter
 - **Garten-Plan** (`/garten/plan`): Beete pro Garten, Pflanzen pro Beet pro Saison, Vorjahre-Anzeige, Fruchtfolge-Tipp via Gemini 2.5 Flash-Lite (mit deterministischem Companion-Pre-Filter) beim "+ Pflanze hinzufügen"
+- **Wetter-Coach** (Stage 6, oben in Mein Garten): 7-Tage-Vorhersage via Open-Meteo, severe-event-Banner (Frost / Sturm / Gewitter / Starkregen / Hitze / Trockenperiode) für die nächsten 48h mit Uhrzeit. Tasks werden Wetter-aware: „Tomate ausgeizen — Mittwoch Regen, vorher trocken halten." PLZ-Setup pro Garten, lat/lng via Zippopotam (DE/AT/CH/NL). Cache 6h auf `gardens.weather_cache`
 - **Per-garden passwords**: first-login setup, forgot-password via Resend email to admin, 10-min reset-token dedup poka-yoke
 - **Gepflanzt / Nicht mehr gepflanzt**: toggle `planted_at DATE` on plant detail
 - **Manual plant + Gemini autofill** (`/browse/add`): fills the 16 fields + kawaii illustration in the background
@@ -54,9 +55,11 @@ A digital plant companion inspired by Kim's physical plant card album. Mobile-fi
 plants: id, name, latin_name, category, illustration_url, family,
         [16 botanical fields]
 
--- Per-garden auth + ownership + weekly-tasks cache
+-- Per-garden auth + ownership + weekly-tasks cache + weather
 gardens: id, owner_name, password_hash, reset_token, reset_expires_at,
-         weekly_tasks_cache JSONB, weekly_tasks_cache_date DATE
+         weekly_tasks_cache JSONB, weekly_tasks_cache_date DATE,
+         zip_code, country_code, latitude, longitude, location_label,
+         weather_cache JSONB, weather_cache_at TIMESTAMPTZ
 
 -- Per-garden plant rows: interessiert (planted_at NULL) vs gepflanzt (date set)
 garden_plants: id, garden_id, plant_id, planted_at DATE,
@@ -105,6 +108,10 @@ npm run generate-images -- --all
 # Backfill plants.family (Solanaceae, Brassicaceae, …) for Fruchtfolge.
 # Idempotent: only fills WHERE family IS NULL. Pass --all to overwrite.
 npm run backfill-families
+
+# Bulk-set garden locations from scripts/locations.json
+# (admin task — for setting many gardens' PLZ at once)
+npm run set-locations
 ```
 
 ### Environment Variables

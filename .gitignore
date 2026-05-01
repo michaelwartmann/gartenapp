@@ -37,6 +37,9 @@ yarn-error.log*
 # vercel
 .vercel
 
+# admin data — gardens' postal codes (personal info, not committed)
+/scripts/locations.json
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

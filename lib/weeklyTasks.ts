@@ -56,11 +56,21 @@ const SYSTEM_PROMPT = `Du bist ein erfahrener Gärtner in Mitteleuropa (Deutschl
 
 Du bekommst:
 - heutiges Datum
+- optional einen Wetter-Kontext: 7-Tage-Vorhersage und besondere Ereignisse (Frost, Sturm, Gewitter, Starkregen, Hitze, Trockenperiode)
 - Liste der gepflanzten Pflanzen mit Pflanzdatum (planted_at) und den Feldern: saatzeit, vorzucht, schneiden, ernte, einjaehrig_oder_mehrjaehrig
 
 ---
 
 Aufgabe: Erstelle eine kurze Liste von Aufgaben (0 bis 8 Einträge), die in den nächsten ca. 14 Tagen anstehen.
+
+Wenn Wetter-Kontext da ist, **mische ihn aktiv ein**:
+- Bei kommendem Regen: vorher gießen lohnt nicht; Saatreihen schützen.
+- Bei Trockenperiode: gießen-Erinnerung, mulchen-Tipp.
+- Bei Frostnacht: junge / frostempfindliche Pflanzen abdecken oder reinholen.
+- Bei Sturm: Stäbe sichern, hohe Pflanzen abstützen, lockere Folien runter.
+- Bei Hitze: morgens / abends gießen, schattieren, Tomatenblüten setzen besser bei < 30 °C an.
+- Bei Gewitter / Hagel: junge Pflanzen kurz abdecken.
+Beziehe dich konkret auf den Wetter-Tag im "why" (z.B. "morgen Sturm ab 14 Uhr").
 
 Felder pro Aufgabe:
 - "plant_id": exakt aus der Eingabe übernehmen
@@ -83,12 +93,31 @@ Regeln:
 
 Schreib alles auf Deutsch. Gib ausschließlich JSON zurück, passend zum Response-Schema.`
 
+export type WeatherContext = {
+  // Compact daily summary, e.g. ["Mo 22° klar", "Di 18° Regen 8mm", ...]
+  daily: string[]
+  // Severe-event hints, e.g. ["Mittwoch Sturm ab 14 Uhr", "5 trockene Tage in Folge"]
+  severe: string[]
+}
+
 function buildUserPrompt(input: {
   todayISO: string
   planted: PlantedPlantInput[]
+  weather?: WeatherContext
 }): string {
   const lines: string[] = []
   lines.push(`Heute: ${input.todayISO}`)
+  if (input.weather) {
+    lines.push('')
+    lines.push('Wetter-Kontext:')
+    if (input.weather.daily.length > 0) {
+      for (const d of input.weather.daily) lines.push(`- ${d}`)
+    }
+    if (input.weather.severe.length > 0) {
+      lines.push('Besondere Ereignisse:')
+      for (const s of input.weather.severe) lines.push(`- ${s}`)
+    }
+  }
   lines.push('')
   lines.push(`Gepflanzte Pflanzen (${input.planted.length}):`)
   lines.push(JSON.stringify(input.planted))
@@ -109,6 +138,7 @@ function urgencyRank(u: Urgency): number {
 export async function recommendTasks(input: {
   todayISO: string
   planted: PlantedPlantInput[]
+  weather?: WeatherContext
 }): Promise<WeeklyTasksResult> {
   const apiKey = process.env.GOOGLE_AI_API_KEY
   if (!apiKey) throw new Error('Missing GOOGLE_AI_API_KEY')

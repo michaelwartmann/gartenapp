@@ -8,7 +8,8 @@
     "start": "next start",
     "seed-plants": "tsx scripts/seed-plants.ts",
     "generate-images": "tsx scripts/generate-images.ts",
-    "backfill-families": "tsx scripts/backfill-families.ts"
+    "backfill-families": "tsx scripts/backfill-families.ts",
+    "set-locations": "tsx scripts/set-locations.ts"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
