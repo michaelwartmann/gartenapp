@@ -159,7 +159,7 @@ export default function AddPlantSheet({
           </div>
           <button
             onClick={onClose}
-            className="text-2xl px-2 py-1 touch-none shrink-0"
+            className="text-2xl px-2 py-1 touch-manipulation shrink-0"
             style={{ color: '#888780' }}
             aria-label="Schließen"
           >
@@ -192,7 +192,7 @@ export default function AddPlantSheet({
               </div>
               <button
                 onClick={() => setSelected(null)}
-                className="text-sm underline touch-none"
+                className="text-sm underline touch-manipulation"
                 style={{ color: '#888780' }}
               >
                 ändern
@@ -257,7 +257,7 @@ export default function AddPlantSheet({
             <button
               onClick={confirmAdd}
               disabled={pending}
-              className="w-full py-4 rounded-xl text-white font-medium text-base min-h-[56px] touch-none disabled:opacity-60"
+              className="w-full py-4 rounded-xl text-white font-medium text-base min-h-[56px] touch-manipulation disabled:opacity-60"
               style={{ backgroundColor: '#4A7C59' }}
             >
               {pending
@@ -282,7 +282,7 @@ export default function AddPlantSheet({
               {!isLastYear && !query.trim() && (
                 <button
                   onClick={() => setHideOthers((v) => !v)}
-                  className="text-xs underline touch-none"
+                  className="text-xs underline touch-manipulation"
                   style={{ color: '#888780' }}
                 >
                   {hideOthers
@@ -314,7 +314,7 @@ export default function AddPlantSheet({
                       <button
                         key={p.id}
                         onClick={() => setSelected(p)}
-                        className="w-full flex items-center gap-3 p-3 rounded-lg border bg-white touch-none"
+                        className="w-full flex items-center gap-3 p-3 rounded-lg border bg-white touch-manipulation"
                         style={{ borderColor: '#E8E6DF' }}
                       >
                         <div

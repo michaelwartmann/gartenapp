@@ -98,7 +98,7 @@ export default function AddPlantForm() {
                 key={cat.value}
                 type="button"
                 onClick={() => setCategory(cat.value)}
-                className="p-4 rounded-lg border text-sm font-medium min-h-[48px] touch-none"
+                className="p-4 rounded-lg border text-sm font-medium min-h-[48px] touch-manipulation"
                 style={{
                   backgroundColor: active ? cat.color : '#FFFFFF',
                   color: active ? '#FFFFFF' : '#2C2C2A',
@@ -132,7 +132,7 @@ export default function AddPlantForm() {
       <button
         type="submit"
         disabled={pending || !!submitted}
-        className="w-full py-4 rounded-xl text-white text-base font-medium min-h-[48px] touch-none disabled:opacity-60"
+        className="w-full py-4 rounded-xl text-white text-base font-medium min-h-[48px] touch-manipulation disabled:opacity-60"
         style={{ backgroundColor: '#4A7C59' }}
       >
         {pending || submitted ? 'Wird hinzugefügt…' : 'Hinzufügen'}

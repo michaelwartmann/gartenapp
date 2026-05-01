@@ -278,14 +278,14 @@ export default async function Home() {
           <div className="flex items-center gap-2 shrink-0">
             <Link
               href="/garten/plan"
-              className="text-sm font-medium px-3 py-2 rounded-lg border touch-none"
+              className="text-sm font-medium px-3 py-2 rounded-lg border touch-manipulation"
               style={{ borderColor: '#4A7C59', color: '#4A7C59' }}
             >
               🗺️ Plan
             </Link>
             <Link
               href="/browse"
-              className="text-sm font-medium px-3 py-2 rounded-lg touch-none"
+              className="text-sm font-medium px-3 py-2 rounded-lg touch-manipulation"
               style={{ backgroundColor: '#4A7C59', color: '#FFFFFF' }}
             >
               + Pflanzen
@@ -329,7 +329,7 @@ export default async function Home() {
             </p>
             <Link
               href="/browse"
-              className="inline-block px-6 py-3 rounded-xl font-medium text-white touch-none"
+              className="inline-block px-6 py-3 rounded-xl font-medium text-white touch-manipulation"
               style={{ backgroundColor: '#4A7C59' }}
             >
               Pflanzen durchsuchen

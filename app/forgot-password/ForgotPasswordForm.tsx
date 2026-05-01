@@ -51,7 +51,7 @@ export default function ForgotPasswordForm() {
       <button
         type="submit"
         disabled={pending}
-        className="w-full py-4 rounded-xl text-white font-medium text-lg min-h-[56px] touch-none disabled:opacity-60"
+        className="w-full py-4 rounded-xl text-white font-medium text-lg min-h-[56px] touch-manipulation disabled:opacity-60"
         style={{ backgroundColor: '#4A7C59' }}
       >
         {pending ? '…' : 'Zurücksetzung anfragen'}
