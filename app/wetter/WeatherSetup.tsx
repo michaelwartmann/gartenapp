@@ -78,7 +78,7 @@ export default function WeatherSetup() {
         </p>
         <button
           onClick={() => setOpen(false)}
-          className="text-xs touch-none"
+          className="text-xs touch-manipulation"
           style={{ color: '#888780' }}
         >
           Abbrechen
@@ -91,7 +91,7 @@ export default function WeatherSetup() {
             <button
               key={c.code}
               onClick={() => setCountry(c.code)}
-              className="px-3 py-2 rounded-full text-sm font-medium touch-none"
+              className="px-3 py-2 rounded-full text-sm font-medium touch-manipulation"
               style={{
                 backgroundColor: active ? '#4A7C59' : '#FFFFFF',
                 color: active ? '#FFFFFF' : '#2C2C2A',
@@ -129,7 +129,7 @@ export default function WeatherSetup() {
       <button
         onClick={submit}
         disabled={pending || !zip.trim()}
-        className="w-full px-4 py-3 rounded-lg text-white text-base font-medium min-h-[48px] touch-none disabled:opacity-60"
+        className="w-full px-4 py-3 rounded-lg text-white text-base font-medium min-h-[48px] touch-manipulation disabled:opacity-60"
         style={{ backgroundColor: '#4A7C59' }}
       >
         {pending ? '…' : 'Speichern'}

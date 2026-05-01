@@ -91,7 +91,7 @@ export default function SuggestionCard({
         <button
           onClick={handleAdd}
           disabled={pending || added}
-          className="w-full py-2 rounded-lg text-sm font-medium touch-none transition-colors"
+          className="w-full py-2 rounded-lg text-sm font-medium touch-manipulation transition-colors"
           style={
             added
               ? { backgroundColor: '#F0EDE4', color: '#4A7C59' }

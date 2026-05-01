@@ -128,7 +128,7 @@ function NameStage(props: {
       <button
         type="submit"
         disabled={props.checking}
-        className="w-full py-4 rounded-xl text-white font-medium text-lg min-h-[56px] touch-none disabled:opacity-60"
+        className="w-full py-4 rounded-xl text-white font-medium text-lg min-h-[56px] touch-manipulation disabled:opacity-60"
         style={{ backgroundColor: '#4A7C59' }}
       >
         {props.checking ? '…' : 'Weiter'}
@@ -187,7 +187,7 @@ function PasswordStage(props: {
         <button
           type="button"
           onClick={props.onBack}
-          className="text-xs underline touch-none"
+          className="text-xs underline touch-manipulation"
           style={{ color: '#888780' }}
         >
           ändern
@@ -247,7 +247,7 @@ function PasswordStage(props: {
       <button
         type="submit"
         disabled={pending}
-        className="w-full py-4 rounded-xl text-white font-medium text-lg min-h-[56px] touch-none disabled:opacity-60"
+        className="w-full py-4 rounded-xl text-white font-medium text-lg min-h-[56px] touch-manipulation disabled:opacity-60"
         style={{ backgroundColor: '#4A7C59' }}
       >
         {pending ? '…' : props.needsSetup ? 'Passwort festlegen' : 'Einloggen'}

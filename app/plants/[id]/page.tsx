@@ -77,6 +77,7 @@ export default function PlantDetailPage({ params }: { params: Promise<{ id: stri
   const [gardenPlant, setGardenPlant] = useState<GardenPlant | null>(null)
   const [editingField, setEditingField] = useState<string | null>(null)
   const [editValue, setEditValue] = useState('')
+  const [editFieldsMode, setEditFieldsMode] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [reloadCounter, setReloadCounter] = useState(0)
@@ -333,7 +334,7 @@ export default function PlantDetailPage({ params }: { params: Promise<{ id: stri
         )}
         <button
           onClick={() => router.back()}
-          className="absolute top-4 left-4 w-12 h-12 bg-white/90 rounded-full flex items-center justify-center text-lg font-medium touch-none"
+          className="absolute top-4 left-4 w-12 h-12 bg-white/90 rounded-full flex items-center justify-center text-lg font-medium touch-manipulation"
           style={{ color: '#2C2C2A' }}
         >
           ←
@@ -376,7 +377,7 @@ export default function PlantDetailPage({ params }: { params: Promise<{ id: stri
               <button
                 onClick={handleMarkPlanted}
                 disabled={plantedPending}
-                className="w-full py-4 rounded-xl text-white font-medium text-lg min-h-[56px] touch-none disabled:opacity-60"
+                className="w-full py-4 rounded-xl text-white font-medium text-lg min-h-[56px] touch-manipulation disabled:opacity-60"
                 style={{ backgroundColor: '#4A7C59' }}
               >
                 {plantedPending ? '…' : '🌱 Gepflanzt'}
@@ -395,7 +396,7 @@ export default function PlantDetailPage({ params }: { params: Promise<{ id: stri
                   <button
                     onClick={handleSavePlantedDate}
                     disabled={plantedPending || !plantedDateDraft}
-                    className="flex-1 px-4 py-3 rounded-lg text-white text-base font-medium min-h-[48px] touch-none disabled:opacity-60"
+                    className="flex-1 px-4 py-3 rounded-lg text-white text-base font-medium min-h-[48px] touch-manipulation disabled:opacity-60"
                     style={{ backgroundColor: '#4A7C59' }}
                   >
                     {plantedPending ? '…' : 'Speichern'}
@@ -403,7 +404,7 @@ export default function PlantDetailPage({ params }: { params: Promise<{ id: stri
                   <button
                     onClick={() => setEditingPlantedDate(false)}
                     disabled={plantedPending}
-                    className="flex-1 px-4 py-3 rounded-lg text-base font-medium border min-h-[48px] touch-none"
+                    className="flex-1 px-4 py-3 rounded-lg text-base font-medium border min-h-[48px] touch-manipulation"
                     style={{ borderColor: '#E8E6DF', color: '#888780' }}
                   >
                     Abbrechen
@@ -521,7 +522,7 @@ export default function PlantDetailPage({ params }: { params: Promise<{ id: stri
                       <button
                         onClick={() => handleToggleBed(b)}
                         disabled={busy || bedPending}
-                        className="w-9 h-9 rounded-full flex items-center justify-center text-base touch-none disabled:opacity-60 shrink-0"
+                        className="w-9 h-9 rounded-full flex items-center justify-center text-base touch-manipulation disabled:opacity-60 shrink-0"
                         style={{
                           backgroundColor: planted ? '#4A7C59' : 'transparent',
                           color: planted ? '#FFFFFF' : '#888780',
@@ -552,7 +553,7 @@ export default function PlantDetailPage({ params }: { params: Promise<{ id: stri
                           <button
                             onClick={() => handleSaveBedDate(b)}
                             disabled={busy || !bedDateDraft}
-                            className="flex-1 px-3 py-2 rounded-lg text-white text-sm font-medium min-h-[40px] touch-none disabled:opacity-60"
+                            className="flex-1 px-3 py-2 rounded-lg text-white text-sm font-medium min-h-[40px] touch-manipulation disabled:opacity-60"
                             style={{ backgroundColor: '#4A7C59' }}
                           >
                             {busy ? '…' : 'Speichern'}
@@ -560,7 +561,7 @@ export default function PlantDetailPage({ params }: { params: Promise<{ id: stri
                           <button
                             onClick={handleCancelBedDate}
                             disabled={busy}
-                            className="flex-1 px-3 py-2 rounded-lg text-sm font-medium border min-h-[40px] touch-none"
+                            className="flex-1 px-3 py-2 rounded-lg text-sm font-medium border min-h-[40px] touch-manipulation"
                             style={{ borderColor: '#E8E6DF', color: '#888780' }}
                           >
                             Abbrechen
@@ -575,25 +576,52 @@ export default function PlantDetailPage({ params }: { params: Promise<{ id: stri
           </div>
         )}
 
+        {/* Fields header with edit-mode toggle.
+            Default = read-only so scrolling never gets hijacked into an
+            edit. Tap "Bearbeiten" to make all fields tappable. */}
+        <div className="flex items-center justify-between mb-3">
+          <h2
+            className="text-xs font-medium uppercase tracking-wide"
+            style={{ color: '#888780' }}
+          >
+            Pflanzen-Details
+          </h2>
+          <button
+            onClick={() => {
+              if (editFieldsMode) handleCancelEdit()
+              setEditFieldsMode((v) => !v)
+            }}
+            className="text-xs font-medium px-3 py-1.5 rounded-lg touch-manipulation"
+            style={{
+              backgroundColor: editFieldsMode ? '#4A7C59' : 'transparent',
+              color: editFieldsMode ? '#FFFFFF' : '#4A7C59',
+              border: `1px solid #4A7C59`,
+            }}
+          >
+            {editFieldsMode ? '✓ Fertig' : '✏️ Bearbeiten'}
+          </button>
+        </div>
+
         {/* Fields */}
         <div className="space-y-4">
           {Object.entries(fieldLabels).map(([field, label]) => {
             const value = getFieldValue(field)
             const isEditing = editingField === field
+            const tappable = editFieldsMode
 
             return (
               <div key={field} className="space-y-2">
                 <label className="block text-xs font-medium uppercase tracking-wide" style={{ color: '#888780' }}>
                   {label}
                 </label>
-                
+
                 {isEditing ? (
                   <div className="space-y-2">
                     <textarea
                       value={editValue}
                       onChange={(e) => setEditValue(e.target.value)}
                       className="w-full p-3 rounded-lg border bg-white resize-none"
-                      style={{ 
+                      style={{
                         borderColor: '#E8E6DF',
                         color: '#2C2C2A'
                       }}
@@ -603,14 +631,14 @@ export default function PlantDetailPage({ params }: { params: Promise<{ id: stri
                     <div className="flex gap-2">
                       <button
                         onClick={handleSaveField}
-                        className="flex-1 px-4 py-3 rounded-lg text-white text-base font-medium min-h-[48px] touch-none"
+                        className="flex-1 px-4 py-3 rounded-lg text-white text-base font-medium min-h-[48px] touch-manipulation"
                         style={{ backgroundColor: '#4A7C59' }}
                       >
                         Speichern
                       </button>
                       <button
                         onClick={handleCancelEdit}
-                        className="flex-1 px-4 py-3 rounded-lg text-gray-600 text-base font-medium border min-h-[48px] touch-none"
+                        className="flex-1 px-4 py-3 rounded-lg text-gray-600 text-base font-medium border min-h-[48px] touch-manipulation"
                         style={{ borderColor: '#E8E6DF' }}
                       >
                         Abbrechen
@@ -619,9 +647,18 @@ export default function PlantDetailPage({ params }: { params: Promise<{ id: stri
                   </div>
                 ) : (
                   <div
-                    onClick={() => handleFieldClick(field, value)}
-                    className="p-4 rounded-lg border bg-white cursor-pointer hover:bg-gray-50 transition-colors min-h-[48px] flex items-center touch-none"
-                    style={{ borderColor: '#E8E6DF' }}
+                    onClick={
+                      tappable ? () => handleFieldClick(field, value) : undefined
+                    }
+                    className={`p-4 rounded-lg border bg-white min-h-[48px] flex items-center transition-colors ${
+                      tappable
+                        ? 'cursor-pointer hover:bg-gray-50 touch-manipulation'
+                        : ''
+                    }`}
+                    style={{
+                      borderColor: tappable ? '#4A7C59' : '#E8E6DF',
+                      borderStyle: tappable ? 'dashed' : 'solid',
+                    }}
                   >
                     <p className="text-base leading-relaxed" style={{ color: value ? '#2C2C2A' : '#888780' }}>
                       {value || '—'}

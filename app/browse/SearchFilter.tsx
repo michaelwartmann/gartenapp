@@ -84,7 +84,7 @@ export default function SearchFilter({ plants, inGardenIds }: Props) {
               <button
                 key={cat}
                 onClick={() => setCategory(cat)}
-                className="px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap touch-none"
+                className="px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap touch-manipulation"
                 style={{
                   backgroundColor: active ? '#4A7C59' : '#FFFFFF',
                   color: active ? '#FFFFFF' : '#2C2C2A',
@@ -143,7 +143,7 @@ export default function SearchFilter({ plants, inGardenIds }: Props) {
                 <button
                   onClick={() => toggle(plant)}
                   disabled={isPending}
-                  className="w-full text-xs py-2 rounded-lg font-medium touch-none disabled:opacity-60"
+                  className="w-full text-xs py-2 rounded-lg font-medium touch-manipulation disabled:opacity-60"
                   style={{
                     backgroundColor: isIn ? '#FFFFFF' : '#4A7C59',
                     color: isIn ? '#888780' : '#FFFFFF',

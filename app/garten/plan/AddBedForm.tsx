@@ -44,7 +44,7 @@ export default function AddBedForm() {
     return (
       <button
         onClick={() => setOpen(true)}
-        className="block w-full text-center py-4 rounded-xl border-2 border-dashed text-sm font-medium touch-none"
+        className="block w-full text-center py-4 rounded-xl border-2 border-dashed text-sm font-medium touch-manipulation"
         style={{ borderColor: '#C8C5BA', color: '#4A7C59' }}
       >
         + Beet hinzufügen
@@ -73,7 +73,7 @@ export default function AddBedForm() {
             <button
               key={opt.value}
               onClick={() => setKind(opt.value)}
-              className="px-3 py-2 rounded-full text-sm font-medium whitespace-nowrap touch-none"
+              className="px-3 py-2 rounded-full text-sm font-medium whitespace-nowrap touch-manipulation"
               style={{
                 backgroundColor: active ? '#4A7C59' : '#FFFFFF',
                 color: active ? '#FFFFFF' : '#2C2C2A',
@@ -94,7 +94,7 @@ export default function AddBedForm() {
         <button
           onClick={submit}
           disabled={pending || !label.trim()}
-          className="flex-1 px-4 py-3 rounded-lg text-white text-base font-medium min-h-[48px] touch-none disabled:opacity-60"
+          className="flex-1 px-4 py-3 rounded-lg text-white text-base font-medium min-h-[48px] touch-manipulation disabled:opacity-60"
           style={{ backgroundColor: '#4A7C59' }}
         >
           {pending ? '…' : 'Anlegen'}
@@ -105,7 +105,7 @@ export default function AddBedForm() {
             setOpen(false)
           }}
           disabled={pending}
-          className="flex-1 px-4 py-3 rounded-lg text-base font-medium border min-h-[48px] touch-none"
+          className="flex-1 px-4 py-3 rounded-lg text-base font-medium border min-h-[48px] touch-manipulation"
           style={{ borderColor: '#E8E6DF', color: '#888780' }}
         >
           Abbrechen

@@ -83,7 +83,7 @@ function CurrentChip({
         <button
           onClick={onToggle}
           disabled={busy}
-          className="w-6 h-6 rounded-full flex items-center justify-center text-sm touch-none disabled:opacity-60"
+          className="w-6 h-6 rounded-full flex items-center justify-center text-sm touch-manipulation disabled:opacity-60"
           style={{
             backgroundColor: planted ? bg : 'transparent',
             color: planted ? '#FFFFFF' : '#888780',
@@ -113,7 +113,7 @@ function CurrentChip({
         <button
           onClick={onHarvest}
           disabled={busy}
-          className="w-6 h-6 rounded-full flex items-center justify-center text-xs touch-none disabled:opacity-60"
+          className="w-6 h-6 rounded-full flex items-center justify-center text-xs touch-manipulation disabled:opacity-60"
           style={{ color: '#888780' }}
           aria-label={`${p.plant_name} abgeerntet`}
           title="Als abgeerntet markieren"
@@ -125,7 +125,7 @@ function CurrentChip({
         <button
           onClick={onUnharvest}
           disabled={busy}
-          className="w-6 h-6 rounded-full flex items-center justify-center text-xs touch-none disabled:opacity-60"
+          className="w-6 h-6 rounded-full flex items-center justify-center text-xs touch-manipulation disabled:opacity-60"
           style={{ color: '#888780' }}
           aria-label="Ernte rückgängig"
           title="Doch nicht abgeerntet"
@@ -136,7 +136,7 @@ function CurrentChip({
         <button
           onClick={onRemove}
           disabled={busy}
-          className="w-6 h-6 rounded-full flex items-center justify-center text-sm touch-none disabled:opacity-60"
+          className="w-6 h-6 rounded-full flex items-center justify-center text-sm touch-manipulation disabled:opacity-60"
           style={{ color: '#888780' }}
           aria-label={`${p.plant_name} entfernen`}
         >
@@ -171,7 +171,7 @@ function LastYearChip({
       <button
         onClick={onRemove}
         disabled={busy}
-        className="w-5 h-5 rounded-full flex items-center justify-center text-xs touch-none disabled:opacity-60"
+        className="w-5 h-5 rounded-full flex items-center justify-center text-xs touch-manipulation disabled:opacity-60"
         style={{ color: '#888780' }}
         aria-label={`${p.plant_name} aus Vorjahr entfernen`}
       >
@@ -255,7 +255,7 @@ export default function BedCard({ view }: { view: BedView }) {
         {!confirmDelete ? (
           <button
             onClick={() => setConfirmDelete(true)}
-            className="text-sm px-2 py-1 touch-none"
+            className="text-sm px-2 py-1 touch-manipulation"
             style={{ color: '#888780' }}
             aria-label="Beet löschen"
           >
@@ -266,14 +266,14 @@ export default function BedCard({ view }: { view: BedView }) {
             <button
               onClick={doDelete}
               disabled={pending}
-              className="text-xs px-2 py-1 rounded touch-none"
+              className="text-xs px-2 py-1 rounded touch-manipulation"
               style={{ backgroundColor: '#FDE8E2', color: '#C17B5C' }}
             >
               {pending ? '…' : 'Löschen'}
             </button>
             <button
               onClick={() => setConfirmDelete(false)}
-              className="text-xs px-2 py-1 rounded touch-none"
+              className="text-xs px-2 py-1 rounded touch-manipulation"
               style={{ color: '#888780' }}
             >
               Abbrechen
@@ -292,7 +292,7 @@ export default function BedCard({ view }: { view: BedView }) {
           </p>
           <button
             onClick={() => setSheetSeason('current')}
-            className="text-xs font-medium touch-none"
+            className="text-xs font-medium touch-manipulation"
             style={{ color: '#4A7C59' }}
           >
             + Pflanze
@@ -329,7 +329,7 @@ export default function BedCard({ view }: { view: BedView }) {
           </p>
           <button
             onClick={() => setSheetSeason('last_year')}
-            className="text-xs font-medium touch-none"
+            className="text-xs font-medium touch-manipulation"
             style={{ color: '#888780' }}
           >
             + ergänzen
