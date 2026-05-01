@@ -21,30 +21,80 @@ function categoryColor(cat: string): string {
   }
 }
 
+type BedRef = { kind: string; label: string }
+
 type SplitPlants = {
   planted: Plant[]
   interested: Plant[]
   plantedForTasks: PlantedPlantInput[]
+  bedsByPlant: Map<string, BedRef[]>
+}
+
+const KIND_ICON: Record<string, string> = {
+  beet: '🟫',
+  hochbeet: '📦',
+  gewaechshaus: '🏠',
+  topf: '🪴',
 }
 
 async function getMyPlants(gardenId: string | null): Promise<SplitPlants> {
-  if (!gardenId) return { planted: [], interested: [], plantedForTasks: [] }
+  if (!gardenId) {
+    return {
+      planted: [],
+      interested: [],
+      plantedForTasks: [],
+      bedsByPlant: new Map(),
+    }
+  }
   const supabase = supabaseAdmin()
-  const { data, error } = await supabase
-    .from('garden_plants')
-    .select('planted_at, plants(*)')
-    .eq('garden_id', gardenId)
-    .order('plant_id')
+  const yearNow = new Date().getFullYear()
 
-  if (error) {
-    console.error('Error fetching garden plants:', error)
-    return { planted: [], interested: [], plantedForTasks: [] }
+  const [gpRes, bedsRes] = await Promise.all([
+    supabase
+      .from('garden_plants')
+      .select('planted_at, plants(*)')
+      .eq('garden_id', gardenId)
+      .order('plant_id'),
+    supabase
+      .from('bed_plantings')
+      .select('plant_id, beds!inner(garden_id, label, kind)')
+      .eq('season_year', yearNow)
+      .order('created_at', { ascending: true }),
+  ])
+
+  if (gpRes.error) {
+    console.error('Error fetching garden plants:', gpRes.error)
+    return {
+      planted: [],
+      interested: [],
+      plantedForTasks: [],
+      bedsByPlant: new Map(),
+    }
+  }
+
+  type BedJoinRow = {
+    plant_id: string
+    beds:
+      | { garden_id: string; label: string; kind: string }
+      | Array<{ garden_id: string; label: string; kind: string }>
+      | null
+  }
+  const bedsByPlant = new Map<string, BedRef[]>()
+  for (const row of (bedsRes.data ?? []) as BedJoinRow[]) {
+    const b = Array.isArray(row.beds) ? row.beds[0] : row.beds
+    if (!b || b.garden_id !== gardenId) continue
+    const list = bedsByPlant.get(row.plant_id) ?? []
+    // Dedupe (same plant in same bed twice would otherwise show twice)
+    if (!list.some((x) => x.label === b.label && x.kind === b.kind)) {
+      list.push({ kind: b.kind, label: b.label })
+    }
+    bedsByPlant.set(row.plant_id, list)
   }
 
   const planted: Plant[] = []
   const interested: Plant[] = []
   const plantedForTasks: PlantedPlantInput[] = []
-  for (const row of data ?? []) {
+  for (const row of gpRes.data ?? []) {
     const r = row as { planted_at: string | null; plants: Plant | Plant[] | null }
     const plantList: Plant[] = Array.isArray(r.plants)
       ? r.plants
@@ -75,7 +125,7 @@ async function getMyPlants(gardenId: string | null): Promise<SplitPlants> {
   planted.sort(byName)
   interested.sort(byName)
 
-  return { planted, interested, plantedForTasks }
+  return { planted, interested, plantedForTasks, bedsByPlant }
 }
 
 function urgencyPill(u: Urgency): { bg: string; fg: string; label: string } {
@@ -141,7 +191,23 @@ function WeeklyTasksSection({ tasks }: { tasks: WeeklyTask[] }) {
   )
 }
 
-function PlantCard({ plant }: { plant: Plant }) {
+function BedLine({ beds }: { beds: BedRef[] }) {
+  if (beds.length === 0) return null
+  const first = beds[0]
+  const extra = beds.length - 1
+  const icon = KIND_ICON[first.kind] ?? '🟫'
+  return (
+    <p
+      className="text-xs mt-1 leading-tight truncate"
+      style={{ color: '#4A7C59' }}
+    >
+      {icon} {first.label}
+      {extra > 0 ? ` · +${extra}` : ''}
+    </p>
+  )
+}
+
+function PlantCard({ plant, beds }: { plant: Plant; beds: BedRef[] }) {
   return (
     <Link href={`/plants/${plant.id}`} className="block">
       <div
@@ -176,6 +242,7 @@ function PlantCard({ plant }: { plant: Plant }) {
           <p className="text-sm mt-1 leading-tight italic" style={{ color: '#888780' }}>
             {plant.latin_name}
           </p>
+          <BedLine beds={beds} />
         </div>
       </div>
     </Link>
@@ -184,7 +251,7 @@ function PlantCard({ plant }: { plant: Plant }) {
 
 export default async function Home() {
   const gardenId = await getCurrentGardenId()
-  const { planted, interested, plantedForTasks } = await getMyPlants(gardenId)
+  const { planted, interested, plantedForTasks, bedsByPlant } = await getMyPlants(gardenId)
   const total = planted.length + interested.length
 
   const weeklyTasks =
@@ -195,15 +262,24 @@ export default async function Home() {
   return (
     <div className="min-h-screen px-4 py-6 pb-12" style={{ backgroundColor: '#FAFAF7' }}>
       <div className="w-full max-w-md mx-auto">
-        <header className="mb-6 flex items-center justify-between">
-          <h1 className="text-xl text-gray-600">🌱 Mein Garten</h1>
-          <Link
-            href="/browse"
-            className="text-sm font-medium px-3 py-2 rounded-lg touch-none"
-            style={{ backgroundColor: '#4A7C59', color: '#FFFFFF' }}
-          >
-            + Pflanzen
-          </Link>
+        <header className="mb-6 flex items-center justify-between gap-2">
+          <h1 className="text-xl text-gray-600 truncate">🌱 Mein Garten</h1>
+          <div className="flex items-center gap-2 shrink-0">
+            <Link
+              href="/garten/plan"
+              className="text-sm font-medium px-3 py-2 rounded-lg border touch-none"
+              style={{ borderColor: '#4A7C59', color: '#4A7C59' }}
+            >
+              🗺️ Plan
+            </Link>
+            <Link
+              href="/browse"
+              className="text-sm font-medium px-3 py-2 rounded-lg touch-none"
+              style={{ backgroundColor: '#4A7C59', color: '#FFFFFF' }}
+            >
+              + Pflanzen
+            </Link>
+          </div>
         </header>
 
         <WeeklyTasksSection tasks={weeklyTasks.tasks} />
@@ -248,7 +324,9 @@ export default async function Home() {
                   Im Garten 🌱
                 </h2>
                 <div className="grid grid-cols-2 gap-4">
-                  {planted.map((p) => <PlantCard key={p.id} plant={p} />)}
+                  {planted.map((p) => (
+                    <PlantCard key={p.id} plant={p} beds={bedsByPlant.get(p.id) ?? []} />
+                  ))}
                 </div>
               </section>
             )}
@@ -262,7 +340,9 @@ export default async function Home() {
                   Meine Samen
                 </h2>
                 <div className="grid grid-cols-2 gap-4">
-                  {interested.map((p) => <PlantCard key={p.id} plant={p} />)}
+                  {interested.map((p) => (
+                    <PlantCard key={p.id} plant={p} beds={bedsByPlant.get(p.id) ?? []} />
+                  ))}
                 </div>
               </section>
             )}

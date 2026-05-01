@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "seed-plants": "tsx scripts/seed-plants.ts",
-    "generate-images": "tsx scripts/generate-images.ts"
+    "generate-images": "tsx scripts/generate-images.ts",
+    "backfill-families": "tsx scripts/backfill-families.ts"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",

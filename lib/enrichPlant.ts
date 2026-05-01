@@ -23,6 +23,7 @@ const FIELD_KEYS = [
   'pflanzort',
   'wirkung',
   'stark_oder_schwachzehrer',
+  'family',
 ] as const
 
 type FieldKey = (typeof FIELD_KEYS)[number]
@@ -63,6 +64,8 @@ const FIELD_DESCRIPTIONS: Record<FieldKey, string> = {
     'Wirkung auf den menschlichen Körper (Heilwirkung, Nährwerte). Kurz, praktisch. Nur wenn relevant; sonst leer lassen.',
   stark_oder_schwachzehrer:
     'Genau einer der Werte: "Starkzehrer", "Mittelzehrer" oder "Schwachzehrer".',
+  family:
+    'Botanische Familie auf Latein, z.B. "Solanaceae" (Nachtschattengewächse), "Brassicaceae" (Kreuzblütler), "Asteraceae", "Apiaceae", "Fabaceae", "Cucurbitaceae", "Lamiaceae", "Amaryllidaceae", "Rosaceae". Wird für Fruchtfolge-Empfehlungen genutzt — bitte korrekt angeben oder leer lassen wenn unsicher, niemals raten.',
 }
 
 function buildResponseSchema() {
