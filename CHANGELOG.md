@@ -4,6 +4,25 @@ Alle nennenswerten Änderungen an der Gartenapp, in umgekehrter chronologischer 
 
 ---
 
+## Stage 5B.1 — Form-Override + Rotation (2026-05-02)
+
+Direkt nach 5B aufgekommen: Beet-Form sollte sich pro Beet manuell setzen lassen (Hochbeet kann oval angelegt werden, Topf rechteckig), und Beete sollten sich drehen lassen damit die Skizze Garten-Geometrie abbilden kann.
+
+- **`beds.shape TEXT NULL`** (`'rect' | 'ellipse' | NULL`) — explizite User-Override; NULL = aus `kind` ableiten (Stage 5B-Verhalten unverändert).
+- **`beds.rotation NUMERIC NULL DEFAULT 0`** — Rotation in Grad, normalisiert auf [0, 360) sowohl client- als auch serverseitig.
+- **Form-Toggle-Chip** über dem Canvas wenn ein Beet selektiert ist: `[▭ Rechteck | ◯ Oval]`. Tap wechselt sofort, dirty-Flag triggert.
+- **Konva-Transformer mit `rotateEnabled`** — der Rotate-Anchor erscheint oben über dem Beet. `onTransformEnd` schreibt sowohl skalierte w/h als auch normalisierte Rotation.
+- **Rotation-Reset-Knopf** „↺ 47°" wenn Rotation ≠ 0; ein Tap setzt sie auf 0.
+- `updateBedLayout` erweitert um optionale `shape` + `rotation` Felder, server-seitig validiert und auf [0, 360) normalisiert.
+
+Files:
+- `notes/stage-5b_1-schema.sql` (neu) — Schema-Migration mit CHECK-Constraint auf shape
+- `lib/supabase.ts` (Bed-Type + neuer `BedShape`-Export)
+- `app/garten/plan/editor/{autoLayout,BedCanvas,EditorClient}.tsx`
+- `app/garten/plan/actions.ts` (`updateBedLayout` + `VALID_BED_SHAPES`)
+
+---
+
 ## Stage 5B — Visueller Beet-Editor (2026-05-02)
 
 Die `beds`-Tabelle hatte seit Stage 5A vier reservierte NUMERIC-Felder (`x`, `y`, `w`, `h`) — alle leer. Stage 5B löst dieses Versprechen ein: User können ihre Beete jetzt als Rechtecke (Töpfe + Kübel als Ellipsen) auf einer Skizzenfläche anordnen.

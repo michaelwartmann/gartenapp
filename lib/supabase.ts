@@ -61,6 +61,8 @@ export type Plant = {
 
 export type { BedKind }
 
+export type BedShape = 'rect' | 'ellipse'
+
 export type Bed = {
   id: string
   garden_id: string
@@ -70,6 +72,13 @@ export type Bed = {
   y: number | null
   w: number | null
   h: number | null
+  /**
+   * Stage 5B.1 — explicit shape override. NULL means derive from kind
+   * (topf + kuebel → ellipse, all others → rect).
+   */
+  shape: BedShape | null
+  /** Stage 5B.1 — rotation in degrees, 0 if untouched. */
+  rotation: number | null
   created_at: string
 }
 

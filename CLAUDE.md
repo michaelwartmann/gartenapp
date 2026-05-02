@@ -68,8 +68,11 @@ gardens: id, owner_name, password_hash, reset_token, reset_expires_at,
 garden_plants: id, garden_id, plant_id, planted_at DATE,
                [16 override fields], notes
 
--- Stage 5A: persistent beds per garden (x/y/w/h reserved for 5B editor)
-beds: id, garden_id, label, kind, x, y, w, h, created_at
+-- Stage 5A: persistent beds per garden; x/y/w/h written by Stage 5B editor;
+-- shape/rotation added in Stage 5B.1 (shape='rect'|'ellipse'|NULL = derive
+-- from kind, rotation in degrees normalized to [0,360))
+beds: id, garden_id, label, kind, x, y, w, h,
+      shape TEXT, rotation NUMERIC, created_at
 
 -- Stage 5A: bed history per season (Folgekulturen via multiple rows/year)
 bed_plantings: id, bed_id, plant_id, season_year, planted_at DATE,
@@ -211,6 +214,7 @@ Stages shipped on top of v1.0 — siehe `CHANGELOG.md` für Details:
 - ✅ **Stage 7** (2026-05-01): Beete & Kategorien Polish — 8 Beet-Arten (Fensterbank, Hydroponik, Rasen, Kübel) als 3-Grid-Picker, ✏️-Edit-Knopf, Pflanzen-Kategorien Baum + Strauch, AssignBedSheet beim Pflanze-Hinzufügen, neues `suitable_bed_kinds`-Feld pro Pflanze (Gemini + Backfill)
 - ✅ **Stage 7.1** (2026-05-01): Multi-Category, Findability & Polish — `plants.categories TEXT[]` (Tomate=[Gemüse, Obst], Apfel=[Obst, Baum]), Nuss als 7. Kategorie, Multi-Pick im /browse/add, Filter via `categories.includes`, AssignBedSheet Polling für `suitable_bed_kinds`, Slider-Fix in Browse-Filter (flex-wrap), 20 neue Seed-Pflanzen (Bäume + Sträucher), `npm run backfill-categories`
 - ✅ **Stage 5B** (2026-05-02): Visueller Beet-Editor — Sub-Route `/garten/plan/editor` mit `react-konva` Canvas (480×720 logische px, responsiv gescaled). Beete als Rechtecke (Töpfe + Kübel als Ellipsen), Drag zum Verschieben, Transformer-Eckgriff zum Resizen, zweiter Tap öffnet EditBedSheet. Bestand mit NULL-Koords wird beim ersten Öffnen in 2-Spalten-Kaskade vorpositioniert; ✓ Speichern persistiert via batched `updateBedLayout`. Listen-View bleibt unverändert.
+- ✅ **Stage 5B.1** (2026-05-02): Form-Override + Rotation — `beds.shape` (`'rect' | 'ellipse' | NULL`) und `beds.rotation NUMERIC` neu. Form-Toggle-Chip über dem Canvas wenn ein Beet selektiert ist (Override des Kind-Defaults), Konva-Transformer mit `rotateEnabled`, Rotation-Reset-Knopf wenn ≠ 0.
 
 Next up:
 

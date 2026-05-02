@@ -9,8 +9,10 @@ import {
   type RotationHistoryEntry,
   type RotationCurrentEntry,
 } from '@/lib/recommendRotation'
-import type { Bed, BedKind, Plant } from '@/lib/supabase'
+import type { Bed, BedKind, BedShape, Plant } from '@/lib/supabase'
 import { VALID_BED_KINDS } from '@/lib/bedKinds'
+
+const VALID_BED_SHAPES: BedShape[] = ['rect', 'ellipse']
 
 function adminClient() {
   return createClient(
@@ -214,6 +216,8 @@ export type BedLayoutUpdate = {
   y: number
   w: number
   h: number
+  shape?: BedShape | null
+  rotation?: number
 }
 
 export type UpdateBedLayoutResult =
@@ -224,11 +228,18 @@ const LAYOUT_MIN = 40
 const LAYOUT_CANVAS_W = 480
 const LAYOUT_CANVAS_H = 720
 
+function normalizeRotationServer(deg: number): number {
+  if (!Number.isFinite(deg)) return 0
+  let r = deg % 360
+  if (r < 0) r += 360
+  return r
+}
+
 /**
- * Stage 5B — batched persistence of x/y/w/h for all dirty beds. Validates
- * each id belongs to the current garden in one query, then updates row by
- * row inside the same garden_id guard. Numbers are clamped to canvas bounds
- * server-side as a defense in depth (client clamps too).
+ * Stage 5B — batched persistence of x/y/w/h (+ Stage 5B.1 shape/rotation)
+ * for all dirty beds. Validates each id belongs to the current garden in
+ * one query, then updates row by row inside the same garden_id guard.
+ * Numbers are clamped to canvas bounds server-side as defense in depth.
  */
 export async function updateBedLayout(
   updates: BedLayoutUpdate[]
@@ -240,7 +251,16 @@ export async function updateBedLayout(
   }
   if (updates.length > 200) return { error: 'invalid' }
 
-  const sanitized: BedLayoutUpdate[] = []
+  type Sanitized = {
+    id: string
+    x: number
+    y: number
+    w: number
+    h: number
+    shape: BedShape | null
+    rotation: number
+  }
+  const sanitized: Sanitized[] = []
   for (const u of updates) {
     if (typeof u?.id !== 'string' || u.id.length === 0) return { error: 'invalid' }
     if (
@@ -255,7 +275,13 @@ export async function updateBedLayout(
     const h = Math.max(LAYOUT_MIN, Math.min(LAYOUT_CANVAS_H, u.h))
     const x = Math.max(0, Math.min(LAYOUT_CANVAS_W - w, u.x))
     const y = Math.max(0, Math.min(LAYOUT_CANVAS_H - h, u.y))
-    sanitized.push({ id: u.id, x, y, w, h })
+    let shape: BedShape | null = null
+    if (u.shape !== undefined && u.shape !== null) {
+      if (!VALID_BED_SHAPES.includes(u.shape)) return { error: 'invalid' }
+      shape = u.shape
+    }
+    const rotation = normalizeRotationServer(u.rotation ?? 0)
+    sanitized.push({ id: u.id, x, y, w, h, shape, rotation })
   }
 
   const supabase = adminClient()
@@ -276,7 +302,14 @@ export async function updateBedLayout(
     sanitized.map((u) =>
       supabase
         .from('beds')
-        .update({ x: u.x, y: u.y, w: u.w, h: u.h })
+        .update({
+          x: u.x,
+          y: u.y,
+          w: u.w,
+          h: u.h,
+          shape: u.shape,
+          rotation: u.rotation,
+        })
         .eq('id', u.id)
         .eq('garden_id', gardenId)
     )
