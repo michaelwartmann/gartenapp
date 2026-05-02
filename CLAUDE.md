@@ -139,8 +139,9 @@ GOOGLE_AI_API_KEY=[your_google_ai_key]
 ## 🚀 Deployment
 
 ### Live
-- **Production**: `https://garten.philia-aletheia.art`
-- **Preview / prototype**: `https://gartenapp-dev.vercel.app`
+- **Production**: `https://garten.philia-aletheia.art` — served from the **`prototype` branch** (Vercel "Production Branch" setting)
+- **Preview**: `https://gartenapp-dev.vercel.app` — served from the **`main` branch** (jeder Push auf main triggert nur einen Preview-Build)
+- **Promotion-Workflow**: entwickeln auf `main`, dann `git checkout prototype && git merge --no-ff main -m "merge: <kurzbeschreibung>" && git push origin prototype` → Vercel baut Production automatisch. Push auf `main` alleine geht **nicht** auf Production.
 - **v1.0**: frozen as git tag `v1.0` (demo release — Stage 1)
 
 ### Local
