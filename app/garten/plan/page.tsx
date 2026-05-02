@@ -48,11 +48,24 @@ export default async function GartenPlanPage() {
             </p>
           </div>
         ) : (
-          <div className="space-y-4 mb-6">
-            {beds.map((view) => (
-              <BedCard key={view.bed.id} view={view} />
-            ))}
-          </div>
+          <>
+            <Link
+              href="/garten/plan/editor"
+              className="block w-full mb-4 px-4 py-3 rounded-xl text-center text-sm font-medium border touch-manipulation min-h-[48px] flex items-center justify-center gap-2"
+              style={{
+                color: '#4A7C59',
+                borderColor: '#C9DCC9',
+                backgroundColor: '#F0F5F0',
+              }}
+            >
+              🗺️ Skizze bearbeiten
+            </Link>
+            <div className="space-y-4 mb-6">
+              {beds.map((view) => (
+                <BedCard key={view.bed.id} view={view} />
+              ))}
+            </div>
+          </>
         )}
 
         <AddBedForm />

@@ -7,6 +7,12 @@ import { hashPassword, verifyPassword } from '@/lib/password'
 
 const ONE_YEAR_SECONDS = 60 * 60 * 24 * 365
 
+// `secure: true` cookies are dropped by browsers over plain HTTP except on
+// localhost. That blocks LAN-mobile testing (http://192.168.x.x:3001), so
+// scope `Secure` to production-mode only — Vercel always runs HTTPS, dev
+// over LAN doesn't.
+const COOKIE_SECURE = process.env.NODE_ENV === 'production'
+
 export type LoginState =
   | { error?: 'invalid' | 'wrong-password' | 'already-set' | 'server' }
   | undefined
@@ -40,21 +46,21 @@ async function issueSession(garden: Garden): Promise<void> {
     path: '/',
     maxAge: ONE_YEAR_SECONDS,
     sameSite: 'lax',
-    secure: true,
+    secure: COOKIE_SECURE,
     httpOnly: true,
   })
   cookieStore.set('garten_name', garden.owner_name, {
     path: '/',
     maxAge: ONE_YEAR_SECONDS,
     sameSite: 'lax',
-    secure: true,
+    secure: COOKIE_SECURE,
     httpOnly: false,
   })
   cookieStore.set('garten_id', garden.id, {
     path: '/',
     maxAge: ONE_YEAR_SECONDS,
     sameSite: 'lax',
-    secure: true,
+    secure: COOKIE_SECURE,
     httpOnly: false,
   })
 }
