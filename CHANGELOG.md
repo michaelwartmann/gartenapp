@@ -4,6 +4,30 @@ Alle nennenswerten Änderungen an der Gartenapp, in umgekehrter chronologischer 
 
 ---
 
+## Stage 5B — Visueller Beet-Editor (2026-05-02)
+
+Die `beds`-Tabelle hatte seit Stage 5A vier reservierte NUMERIC-Felder (`x`, `y`, `w`, `h`) — alle leer. Stage 5B löst dieses Versprechen ein: User können ihre Beete jetzt als Rechtecke (Töpfe + Kübel als Ellipsen) auf einer Skizzenfläche anordnen.
+
+- **Neue Sub-Route `/garten/plan/editor`** — Konva-Stage 480×720 logische px, responsiv gescaled für schmale Screens. Eigener Top-Bar mit „← Plan" + „✓ Speichern".
+- **Drag + Resize** — `react-konva` allein, kein `@use-gesture`. Konvas eingebautes Drag mit `dragBoundFunc`-Clamping zum Canvas-Rand; `Transformer` mit Bottom-Right-Eckgriff für Resize, MIN_BED 40 px.
+- **Tap-Geste** — erster Tap selektiert (orange Stroke), zweiter Tap auf das selektierte Beet öffnet das bestehende `EditBedSheet` für Label/Kind-Edit. Drag und Tap diskriminiert via `dragDistance={4}`.
+- **Form pro Beet-Art** — `topf` 🪴 und `kuebel` 🏺 rendern als `<Ellipse>`, alle anderen als `<Rect>`. Skizze ist sofort lesbar ohne Label.
+- **Auto-Layout für Bestand** — beim ersten Öffnen werden NULL-Koord-Beete in 2-Spalten-Kaskade vorpositioniert (insertion order = `created_at`); Hinweis-Banner „Beete wurden automatisch angeordnet — auf ✓ Speichern tippen".
+- **Server-Action `updateBedLayout`** — batched, validiert Garden-Ownership in einer Query, clampt server-seitig zu Canvas-Bounds, `revalidatePath` für `/garten/plan` + `/garten/plan/editor`.
+- **Listen-View bleibt** — `/garten/plan` unverändert; neuer „🗺️ Skizze bearbeiten"-Knopf über den Beet-Karten (nur wenn ≥1 Beet).
+- **`beforeunload`-Warnung** wenn Dirty + Navigieren.
+- **Konva via `dynamic({ssr:false})`** geladen — Standard-Pattern für Browser-only-APIs in Next 16 App Router.
+
+Files:
+- `app/garten/plan/editor/{page.tsx,EditorClient.tsx,BedCanvas.tsx,autoLayout.ts}` (neu)
+- `app/garten/plan/actions.ts` (+ `updateBedLayout` + Helpers)
+- `app/garten/plan/page.tsx` (Skizze-Knopf)
+- `CLAUDE.md` (Stage 5B als ✅, Key Decision #14)
+- `notes/stage-5b-design.md` (Koordinatensystem + Library-Wahl, Foundation für Stage 5C)
+- `package.json` (`react-konva`, `konva`)
+
+---
+
 ## Stage 7.1 — Multi-Category, Findability & Polish (2026-05-01)
 
 Nach Kims Erst-Run kamen sechs Themen auf:

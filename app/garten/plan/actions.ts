@@ -208,6 +208,89 @@ export async function updateBed(
   return { ok: true }
 }
 
+export type BedLayoutUpdate = {
+  id: string
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
+export type UpdateBedLayoutResult =
+  | { ok: true; updated: number }
+  | { error: 'no-garden' | 'invalid' | 'server' }
+
+const LAYOUT_MIN = 40
+const LAYOUT_CANVAS_W = 480
+const LAYOUT_CANVAS_H = 720
+
+/**
+ * Stage 5B — batched persistence of x/y/w/h for all dirty beds. Validates
+ * each id belongs to the current garden in one query, then updates row by
+ * row inside the same garden_id guard. Numbers are clamped to canvas bounds
+ * server-side as a defense in depth (client clamps too).
+ */
+export async function updateBedLayout(
+  updates: BedLayoutUpdate[]
+): Promise<UpdateBedLayoutResult> {
+  const gardenId = await getCurrentGardenId()
+  if (!gardenId) return { error: 'no-garden' }
+  if (!Array.isArray(updates) || updates.length === 0) {
+    return { ok: true, updated: 0 }
+  }
+  if (updates.length > 200) return { error: 'invalid' }
+
+  const sanitized: BedLayoutUpdate[] = []
+  for (const u of updates) {
+    if (typeof u?.id !== 'string' || u.id.length === 0) return { error: 'invalid' }
+    if (
+      !Number.isFinite(u.x) ||
+      !Number.isFinite(u.y) ||
+      !Number.isFinite(u.w) ||
+      !Number.isFinite(u.h)
+    ) {
+      return { error: 'invalid' }
+    }
+    const w = Math.max(LAYOUT_MIN, Math.min(LAYOUT_CANVAS_W, u.w))
+    const h = Math.max(LAYOUT_MIN, Math.min(LAYOUT_CANVAS_H, u.h))
+    const x = Math.max(0, Math.min(LAYOUT_CANVAS_W - w, u.x))
+    const y = Math.max(0, Math.min(LAYOUT_CANVAS_H - h, u.y))
+    sanitized.push({ id: u.id, x, y, w, h })
+  }
+
+  const supabase = adminClient()
+  const ids = sanitized.map((u) => u.id)
+  const { data: ownedRows, error: ownErr } = await supabase
+    .from('beds')
+    .select('id')
+    .eq('garden_id', gardenId)
+    .in('id', ids)
+  if (ownErr) {
+    console.error('updateBedLayout ownership query failed:', ownErr)
+    return { error: 'server' }
+  }
+  const ownedIds = new Set(((ownedRows ?? []) as { id: string }[]).map((r) => r.id))
+  if (ownedIds.size !== ids.length) return { error: 'invalid' }
+
+  const results = await Promise.all(
+    sanitized.map((u) =>
+      supabase
+        .from('beds')
+        .update({ x: u.x, y: u.y, w: u.w, h: u.h })
+        .eq('id', u.id)
+        .eq('garden_id', gardenId)
+    )
+  )
+  const failed = results.find((r) => r.error)
+  if (failed?.error) {
+    console.error('updateBedLayout row update failed:', failed.error)
+    return { error: 'server' }
+  }
+  revalidatePath('/garten/plan/editor')
+  revalidatePath('/garten/plan')
+  return { ok: true, updated: sanitized.length }
+}
+
 export type DeleteBedResult =
   | { ok: true }
   | { error: 'no-garden' | 'not-found' | 'server' }
