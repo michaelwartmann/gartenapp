@@ -10,7 +10,8 @@ import {
   CANVAS_H,
   MIN_BED,
   clampToCanvas,
-  isRound,
+  effectiveShape,
+  normalizeRotation,
   type BedLayout,
 } from './autoLayout'
 
@@ -18,6 +19,8 @@ type Props = {
   beds: BedLayout[]
   onChange: (next: BedLayout[]) => void
   onTapBed: (bedId: string) => void
+  selectedId: string | null
+  onSelect: (id: string | null) => void
 }
 
 const BED_FILL: Record<BedKind, string> = {
@@ -34,8 +37,13 @@ const BED_FILL: Record<BedKind, string> = {
 const BED_STROKE = '#4A7C59'
 const BED_STROKE_SELECTED = '#C17B5C'
 
-export default function BedCanvas({ beds, onChange, onTapBed }: Props) {
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+export default function BedCanvas({
+  beds,
+  onChange,
+  onTapBed,
+  selectedId,
+  onSelect,
+}: Props) {
   const transformerRef = useRef<Konva.Transformer | null>(null)
   const groupRefs = useRef<Map<string, Konva.Group>>(new Map())
   const stageRef = useRef<Konva.Stage | null>(null)
@@ -97,10 +105,10 @@ export default function BedCanvas({ beds, onChange, onTapBed }: Props) {
         scaleY={scale}
         onMouseDown={(e) => {
           // Click on empty stage → deselect
-          if (e.target === e.target.getStage()) setSelectedId(null)
+          if (e.target === e.target.getStage()) onSelect(null)
         }}
         onTouchStart={(e) => {
-          if (e.target === e.target.getStage()) setSelectedId(null)
+          if (e.target === e.target.getStage()) onSelect(null)
         }}
         style={{
           backgroundColor: '#FAFAF7',
@@ -110,7 +118,7 @@ export default function BedCanvas({ beds, onChange, onTapBed }: Props) {
       >
         <Layer>
           {beds.map((bed) => {
-            const round = isRound(bed.kind)
+            const shape = effectiveShape(bed)
             const isSel = bed.id === selectedId
             return (
               <Group
@@ -121,10 +129,13 @@ export default function BedCanvas({ beds, onChange, onTapBed }: Props) {
                 }}
                 x={bed.x}
                 y={bed.y}
+                rotation={bed.rotation}
                 draggable
                 dragDistance={4}
                 dragBoundFunc={(pos) => {
-                  // pos is in stage (scaled) coords; convert via scale
+                  // pos is in stage (scaled) coords; convert via scale.
+                  // Rotation makes precise bounds tricky — clamp the
+                  // top-left of the (still axis-aligned) bounding box.
                   const lx = pos.x / scale
                   const ly = pos.y / scale
                   const cx = Math.max(0, Math.min(CANVAS_W - bed.w, lx))
@@ -132,7 +143,7 @@ export default function BedCanvas({ beds, onChange, onTapBed }: Props) {
                   return { x: cx * scale, y: cy * scale }
                 }}
                 onDragStart={() => {
-                  setSelectedId(bed.id)
+                  onSelect(bed.id)
                 }}
                 onDragEnd={(e) => {
                   patchBed(bed.id, { x: e.target.x(), y: e.target.y() })
@@ -141,14 +152,14 @@ export default function BedCanvas({ beds, onChange, onTapBed }: Props) {
                   if (selectedId === bed.id) {
                     onTapBed(bed.id)
                   } else {
-                    setSelectedId(bed.id)
+                    onSelect(bed.id)
                   }
                 }}
                 onTap={() => {
                   if (selectedId === bed.id) {
                     onTapBed(bed.id)
                   } else {
-                    setSelectedId(bed.id)
+                    onSelect(bed.id)
                   }
                 }}
                 onTransformEnd={(e) => {
@@ -157,7 +168,8 @@ export default function BedCanvas({ beds, onChange, onTapBed }: Props) {
                   const sy = node.scaleY()
                   const newW = Math.max(MIN_BED, bed.w * sx)
                   const newH = Math.max(MIN_BED, bed.h * sy)
-                  // Reset scale, persist as w/h
+                  const newRot = normalizeRotation(node.rotation())
+                  // Reset scale, persist as w/h + rotation
                   node.scaleX(1)
                   node.scaleY(1)
                   patchBed(bed.id, {
@@ -165,10 +177,11 @@ export default function BedCanvas({ beds, onChange, onTapBed }: Props) {
                     y: node.y(),
                     w: newW,
                     h: newH,
+                    rotation: newRot,
                   })
                 }}
               >
-                {round ? (
+                {shape === 'ellipse' ? (
                   <Ellipse
                     x={bed.w / 2}
                     y={bed.h / 2}
@@ -212,7 +225,8 @@ export default function BedCanvas({ beds, onChange, onTapBed }: Props) {
               transformerRef.current = node
             }}
             enabledAnchors={['bottom-right']}
-            rotateEnabled={false}
+            rotateEnabled
+            rotateAnchorOffset={28}
             anchorSize={22}
             anchorCornerRadius={4}
             anchorStroke={BED_STROKE_SELECTED}

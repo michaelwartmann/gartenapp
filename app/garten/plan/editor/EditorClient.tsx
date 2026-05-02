@@ -4,11 +4,13 @@ import { useEffect, useMemo, useState, useTransition } from 'react'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import type { Bed } from '@/lib/supabase'
+import type { Bed, BedShape } from '@/lib/supabase'
 import EditBedSheet from '../EditBedSheet'
 import { updateBedLayout } from '../actions'
 import {
   assignDefaultPositions,
+  effectiveShape,
+  kindDefaultShape,
   type BedLayout,
 } from './autoLayout'
 
@@ -42,6 +44,11 @@ export default function EditorClient({ beds }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [savedFlash, setSavedFlash] = useState(false)
   const [editBedId, setEditBedId] = useState<string | null>(null)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+
+  const selected = selectedId
+    ? layouts.find((l) => l.id === selectedId) ?? null
+    : null
 
   // Warn before navigating away with unsaved changes
   useEffect(() => {
@@ -60,6 +67,22 @@ export default function EditorClient({ beds }: Props) {
     setSavedFlash(false)
   }
 
+  function setShape(id: string, shape: BedShape) {
+    setLayouts((prev) =>
+      prev.map((l) => (l.id === id ? { ...l, shape, autoLaid: false } : l))
+    )
+    setDirty(true)
+    setSavedFlash(false)
+  }
+
+  function resetRotation(id: string) {
+    setLayouts((prev) =>
+      prev.map((l) => (l.id === id ? { ...l, rotation: 0, autoLaid: false } : l))
+    )
+    setDirty(true)
+    setSavedFlash(false)
+  }
+
   function handleSave() {
     setError(null)
     startTransition(async () => {
@@ -69,6 +92,8 @@ export default function EditorClient({ beds }: Props) {
         y: Math.round(l.y),
         w: Math.round(l.w),
         h: Math.round(l.h),
+        shape: l.shape,
+        rotation: Math.round(l.rotation),
       }))
       const res = await updateBedLayout(updates)
       if ('error' in res) {
@@ -144,10 +169,41 @@ export default function EditorClient({ beds }: Props) {
           </div>
         )}
 
+        {selected && (
+          <div className="mb-3 px-3 py-2 rounded-lg flex items-center justify-between gap-2"
+            style={{ backgroundColor: '#FFFFFF', border: '1px solid #E8E6DF' }}
+          >
+            <div className="flex items-center gap-1.5 text-xs flex-1 min-w-0">
+              <span className="font-medium truncate" style={{ color: '#2C2C2A' }}>
+                {selected.label}
+              </span>
+              <span style={{ color: '#888780' }}>·</span>
+              <ShapeToggle
+                value={effectiveShape(selected)}
+                kindDefault={kindDefaultShape(selected.kind)}
+                onChange={(s) => setShape(selected.id, s)}
+              />
+            </div>
+            {Math.round(selected.rotation) !== 0 && (
+              <button
+                type="button"
+                onClick={() => resetRotation(selected.id)}
+                className="text-xs px-2 py-1 rounded touch-manipulation shrink-0"
+                style={{ color: '#4A7C59', backgroundColor: '#F0F5F0' }}
+                title="Drehung zurücksetzen"
+              >
+                ↺ {Math.round(selected.rotation)}°
+              </button>
+            )}
+          </div>
+        )}
+
         <BedCanvas
           beds={layouts}
           onChange={handleChange}
           onTapBed={(id) => setEditBedId(id)}
+          selectedId={selectedId}
+          onSelect={setSelectedId}
         />
       </div>
 
@@ -162,6 +218,47 @@ export default function EditorClient({ beds }: Props) {
           }}
         />
       )}
+    </div>
+  )
+}
+
+function ShapeToggle({
+  value,
+  kindDefault,
+  onChange,
+}: {
+  value: BedShape
+  kindDefault: BedShape
+  onChange: (s: BedShape) => void
+}) {
+  const opts: Array<{ value: BedShape; label: string; icon: string }> = [
+    { value: 'rect', label: 'Rechteck', icon: '▭' },
+    { value: 'ellipse', label: 'Oval', icon: '◯' },
+  ]
+  return (
+    <div className="flex gap-1">
+      {opts.map((o) => {
+        const active = o.value === value
+        const isDefault = o.value === kindDefault
+        return (
+          <button
+            key={o.value}
+            type="button"
+            onClick={() => onChange(o.value)}
+            className="px-2 py-1 rounded text-xs touch-manipulation flex items-center gap-1"
+            style={{
+              backgroundColor: active ? '#4A7C59' : '#FFFFFF',
+              color: active ? '#FFFFFF' : '#888780',
+              border: `1px solid ${active ? '#4A7C59' : '#E8E6DF'}`,
+            }}
+            title={isDefault ? `${o.label} (Standard)` : o.label}
+            aria-label={o.label}
+            aria-pressed={active}
+          >
+            <span>{o.icon}</span>
+          </button>
+        )
+      })}
     </div>
   )
 }

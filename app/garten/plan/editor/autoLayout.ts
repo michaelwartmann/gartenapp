@@ -1,4 +1,4 @@
-import type { Bed, BedKind } from '@/lib/supabase'
+import type { Bed, BedKind, BedShape } from '@/lib/supabase'
 
 export const CANVAS_W = 480
 export const CANVAS_H = 720
@@ -24,8 +24,20 @@ export type BedLayout = {
   y: number
   w: number
   h: number
+  /** Explicit shape override; null = derive from kind (kindDefaultShape). */
+  shape: BedShape | null
+  /** Rotation in degrees, 0–360. */
+  rotation: number
   /** True if x/y/w/h came from auto-layout (not from DB). Triggers initial dirty flag. */
   autoLaid: boolean
+}
+
+export function kindDefaultShape(kind: BedKind): BedShape {
+  return ROUND_KINDS.has(kind) ? 'ellipse' : 'rect'
+}
+
+export function effectiveShape(layout: { kind: BedKind; shape: BedShape | null }): BedShape {
+  return layout.shape ?? kindDefaultShape(layout.kind)
 }
 
 /**
@@ -47,6 +59,8 @@ export function assignDefaultPositions(beds: Bed[]): BedLayout[] {
         y: b.y as number,
         w: b.w as number,
         h: b.h as number,
+        shape: b.shape ?? null,
+        rotation: b.rotation ?? 0,
         autoLaid: false,
       }
     }
@@ -55,7 +69,7 @@ export function assignDefaultPositions(beds: Bed[]): BedLayout[] {
     const col = i % CASCADE.cols
     const x = CASCADE.marginX + col * (CASCADE.cellW + CASCADE.gapX)
     const y = CASCADE.marginY + row * (CASCADE.cellH + CASCADE.gapY)
-    const round = ROUND_KINDS.has(b.kind)
+    const round = (b.shape ?? kindDefaultShape(b.kind)) === 'ellipse'
     const w = round ? Math.min(CASCADE.cellW, CASCADE.cellH) : CASCADE.cellW
     const h = round ? Math.min(CASCADE.cellW, CASCADE.cellH) : CASCADE.cellH
     return {
@@ -66,6 +80,8 @@ export function assignDefaultPositions(beds: Bed[]): BedLayout[] {
       y,
       w,
       h,
+      shape: b.shape ?? null,
+      rotation: b.rotation ?? 0,
       autoLaid: true,
     }
   })
@@ -83,4 +99,11 @@ export function clampToCanvas(
 
 export function isRound(kind: BedKind): boolean {
   return ROUND_KINDS.has(kind)
+}
+
+export function normalizeRotation(deg: number): number {
+  if (!Number.isFinite(deg)) return 0
+  let r = deg % 360
+  if (r < 0) r += 360
+  return r
 }
