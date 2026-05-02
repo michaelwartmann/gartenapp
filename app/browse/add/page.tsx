@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { Suspense } from 'react'
-import AddPlantForm from './AddPlantForm'
+import AddPlantFlow from './AddPlantFlow'
 
 export const dynamic = 'force-dynamic'
 
@@ -34,7 +34,7 @@ export default function AddPlantPage() {
         </p>
 
         <Suspense fallback={null}>
-          <AddPlantForm />
+          <AddPlantFlow />
         </Suspense>
       </div>
     </div>

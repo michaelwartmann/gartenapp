@@ -10,6 +10,7 @@ import {
   type RotationCurrentEntry,
 } from '@/lib/recommendRotation'
 import type { Bed, BedKind, Plant } from '@/lib/supabase'
+import { VALID_BED_KINDS } from '@/lib/bedKinds'
 
 function adminClient() {
   return createClient(
@@ -17,8 +18,6 @@ function adminClient() {
     process.env.SUPABASE_SECRET_KEY!
   )
 }
-
-const VALID_KINDS: BedKind[] = ['beet', 'hochbeet', 'gewaechshaus', 'topf']
 
 function todayISO(): string {
   const d = new Date()
@@ -165,7 +164,7 @@ export async function createBed(
 ): Promise<CreateBedResult> {
   const cleanLabel = label.trim()
   if (!cleanLabel || cleanLabel.length > 60) return { error: 'invalid' }
-  if (!VALID_KINDS.includes(kind as BedKind)) return { error: 'invalid' }
+  if (!VALID_BED_KINDS.includes(kind as BedKind)) return { error: 'invalid' }
   const gardenId = await getCurrentGardenId()
   if (!gardenId) return { error: 'no-garden' }
   const supabase = adminClient()
@@ -182,27 +181,30 @@ export async function createBed(
   return { ok: true, bed: data as Bed }
 }
 
-export type RenameBedResult =
+export type UpdateBedResult =
   | { ok: true }
   | { error: 'no-garden' | 'not-found' | 'invalid' | 'server' }
 
-export async function renameBed(
+export async function updateBed(
   bedId: string,
-  label: string
-): Promise<RenameBedResult> {
+  label: string,
+  kind: string
+): Promise<UpdateBedResult> {
   const cleanLabel = label.trim()
   if (!cleanLabel || cleanLabel.length > 60) return { error: 'invalid' }
+  if (!VALID_BED_KINDS.includes(kind as BedKind)) return { error: 'invalid' }
   const own = await ensureOwnBed(bedId)
   if ('error' in own) return { error: own.error }
   const { error } = await own.supabase
     .from('beds')
-    .update({ label: cleanLabel })
+    .update({ label: cleanLabel, kind })
     .eq('id', bedId)
   if (error) {
-    console.error('renameBed failed:', error)
+    console.error('updateBed failed:', error)
     return { error: 'server' }
   }
   revalidatePath('/garten/plan')
+  revalidatePath('/')
   return { ok: true }
 }
 
@@ -650,6 +652,7 @@ export type AvailablePlant = {
   name: string
   category: string
   illustration_url: string | null
+  suitable_bed_kinds: string[] | null
   gardenStatus: GardenStatus
 }
 
@@ -659,7 +662,7 @@ export async function listAvailablePlants(): Promise<AvailablePlant[]> {
   const [plantsRes, gpRes] = await Promise.all([
     supabase
       .from('plants')
-      .select('id, name, category, illustration_url')
+      .select('id, name, category, illustration_url, suitable_bed_kinds')
       .order('name'),
     gardenId
       ? supabase
@@ -680,6 +683,7 @@ export async function listAvailablePlants(): Promise<AvailablePlant[]> {
     name: string
     category: string
     illustration_url: string | null
+    suitable_bed_kinds: string[] | null
   }
   return ((plantsRes.data ?? []) as PRow[]).map((p) => ({
     ...p,
@@ -693,6 +697,31 @@ export type BedForPlant = {
   bedKind: string
   plantingId: string
   plantedAt: string | null
+}
+
+/**
+ * Read-only fetch of `plants.suitable_bed_kinds`. Used by AssignBedSheet
+ * for live polling — when a freshly created plant's bed-kind suggestions
+ * arrive from background Gemini enrichment, the sheet re-sorts the bed
+ * list. Returns null while still pending.
+ */
+export async function getPlantSuitableBedKinds(
+  plantId: string
+): Promise<string[] | null> {
+  if (!plantId) return null
+  const supabase = adminClient()
+  const { data, error } = await supabase
+    .from('plants')
+    .select('suitable_bed_kinds')
+    .eq('id', plantId)
+    .maybeSingle()
+  if (error) {
+    console.error('getPlantSuitableBedKinds failed:', error)
+    return null
+  }
+  const v = (data as { suitable_bed_kinds: string[] | null } | null)
+    ?.suitable_bed_kinds
+  return v ?? null
 }
 
 export async function listBedsContainingPlant(

@@ -18,7 +18,17 @@ const supabase = createClient(supabaseUrl, supabaseSecretKey)
 type PlantEntry = {
   name: string
   latin_name: string
-  category: 'Gemüse' | 'Kraut' | 'Blume' | 'Obst'
+  category:
+    | 'Gemüse'
+    | 'Kraut'
+    | 'Blume'
+    | 'Obst'
+    | 'Baum'
+    | 'Strauch'
+    | 'Nuss'
+  categories?: string[]
+  family?: string
+  suitable_bed_kinds?: string[]
   sorte?: string
   saatzeit?: string
   saattiefe?: string

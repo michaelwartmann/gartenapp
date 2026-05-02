@@ -55,6 +55,7 @@ A digital plant companion inspired by Kim's physical plant card album. Mobile-fi
 ```sql
 -- Core plant data (shared)
 plants: id, name, latin_name, category, illustration_url, family,
+        suitable_bed_kinds TEXT[], categories TEXT[],
         [16 botanical fields]
 
 -- Per-garden auth + ownership + weekly-tasks cache + weather
@@ -82,7 +83,9 @@ bed_plantings: id, bed_id, plant_id, season_year, planted_at DATE,
 
 **Growing catalog of Western European garden plants** with authentic German cultivation data. Source of truth: `data/plants.json` (committed). Seed via `npm run seed-plants` (upserts by `(name, latin_name)`, preserves any existing `illustration_url`).
 
-Categories: **Gemüse, Kraut, Blume, Obst.** Goal coverage: ~150-200 plants.
+Categories (Stage 7.1, **Multi-Cat**): **Gemüse, Kraut, Blume, Obst, Baum, Strauch, Nuss.** Eine Pflanze kann mehrere Kategorien haben (`plants.categories TEXT[]`). `plants.category` ist die Primary (Display-Pille + Farbe), `categories` enthält *alle* zutreffenden — Filter durchsucht den Array. Tomate=[Gemüse, Obst], Apfel=[Obst, Baum], Brombeere=[Obst, Strauch], Lavendel=[Kraut, Strauch], Walnuss=[Nuss, Baum]. Single source: `PLANT_CATEGORIES` in `lib/supabase.ts`. Goal coverage: ~150-200 plants.
+
+Beet-Arten (`bedKinds.ts`, 8 Werte): **Beet 🟫, Hochbeet 📦, Gewächshaus 🏠, Topf außen 🪴, Fensterbank 🪟, Hydroponik 💧, Rasen/Wiese 🌳, Kübel 🏺.** Wird sowohl in `beds.kind` als auch im Plant-Feld `suitable_bed_kinds TEXT[]` (welche Beet-Arten zur Pflanze passen) verwendet. Single source of truth: `lib/bedKinds.ts`.
 
 **16 German Botanical Fields per plant:**
 Sorte, Saatzeit, Saattiefe, Nachbarn, Erde, Witterung, Bodenmilieu, Dünger, Vorzucht, Schneiden, Einwintern, Ernte, Einjährig/Mehrjährig, Pflanzort, Wirkung auf den Körper, Stark-/Schwachzehrer
@@ -110,6 +113,14 @@ npm run generate-images -- --all
 # Backfill plants.family (Solanaceae, Brassicaceae, …) for Fruchtfolge.
 # Idempotent: only fills WHERE family IS NULL. Pass --all to overwrite.
 npm run backfill-families
+
+# Backfill plants.suitable_bed_kinds (welche Beet-Arten zur Pflanze passen).
+# Idempotent: only fills WHERE suitable_bed_kinds IS NULL. Pass --all to overwrite, --dry für Vorschau.
+npm run backfill-bed-kinds
+
+# Backfill plants.categories — sekundäre Kategorien via Gemini (Apfel→[Obst, Baum], Tomate→[Gemüse, Obst], …).
+# Idempotent: only updates rows where categories IS NULL or only has the primary. Pass --all/--dry.
+npm run backfill-categories
 
 # Bulk-set garden locations from scripts/locations.json
 # (admin task — for setting many gardens' PLZ at once)
@@ -178,6 +189,9 @@ GOOGLE_AI_API_KEY
 8. **Wetter-Schwellen Beaufort-getreu (Stage 6)**: Hinweis vs. Warnung, keine Alarme bei Bft 7 — User sollen nicht freaked-out werden
 9. **RLS + admin-client-only (Security-Fix)**: cookie-basierte Auth + Server-side admin-Client für alle DB-Reads, anon-Key sieht nichts
 10. **Read-Mode default auf Plant Detail**: 16 Felder sind nicht versehentlich tappbar, „✏️ Bearbeiten"-Toggle aktiviert Edit-Modus (iOS-Settings-Pattern)
+11. **Beet-Arten als shared Konstante (Stage 7)**: `lib/bedKinds.ts` ist single source of truth für die 8 Werte; AddBedForm, BedCard, EditBedSheet, AssignBedSheet und der actions-Validator ziehen alle aus derselben Liste. Verhindert Drift.
+12. **`suitable_bed_kinds` als strukturiertes Plant-Feld (Stage 7)**: nicht nur Freitext in „Pflanzort"; AssignBedSheet sortiert nach Eignung, Plan-Picker zeigt ✓/⚠. Gemini-enriched + Backfill-Skript für Bestand.
+13. **Multi-Cat: Findability vor Strenge (Stage 7.1)**: Pflanzen können in mehreren Kategorien gleichzeitig sein. Tomate ist Gemüse *und* Obst, Apfel ist Obst *und* Baum. Filter sucht über den Array, nicht über die Single-Spalte. Primary (= `category`) bleibt für Display und Farbe. Reduziert Klassifizierungs-Streitfragen, hilft beim Suchen.
 
 ## 🎯 v2 Roadmap
 
@@ -192,6 +206,8 @@ Stages shipped on top of v1.0 — siehe `CHANGELOG.md` für Details:
 - ✅ **Stage 5A.1** (2026-05-01): Per-Beet-Pflanztermine als kanonische Wahrheit (Option C), Plan und Mein-Garten synchronisiert, 🌾 Abgeerntet-Polish, Pflanzen-Alter sichtbar
 - ✅ **Stage 6** (2026-05-01): Wetter-Coach mit Beaufort-getreuen Schwellen, Severe-Event-Banner, Wetter-aware „Diese Woche"-Tasks
 - ✅ **Mobile UX-Polish** (2026-05-01): `touch-manipulation` global, Edit-Mode-Toggle auf Plant Detail
+- ✅ **Stage 7** (2026-05-01): Beete & Kategorien Polish — 8 Beet-Arten (Fensterbank, Hydroponik, Rasen, Kübel) als 3-Grid-Picker, ✏️-Edit-Knopf, Pflanzen-Kategorien Baum + Strauch, AssignBedSheet beim Pflanze-Hinzufügen, neues `suitable_bed_kinds`-Feld pro Pflanze (Gemini + Backfill)
+- ✅ **Stage 7.1** (2026-05-01): Multi-Category, Findability & Polish — `plants.categories TEXT[]` (Tomate=[Gemüse, Obst], Apfel=[Obst, Baum]), Nuss als 7. Kategorie, Multi-Pick im /browse/add, Filter via `categories.includes`, AssignBedSheet Polling für `suitable_bed_kinds`, Slider-Fix in Browse-Filter (flex-wrap), 20 neue Seed-Pflanzen (Bäume + Sträucher), `npm run backfill-categories`
 
 Next up:
 

@@ -9,6 +9,8 @@
     "seed-plants": "tsx scripts/seed-plants.ts",
     "generate-images": "tsx scripts/generate-images.ts",
     "backfill-families": "tsx scripts/backfill-families.ts",
+    "backfill-bed-kinds": "tsx scripts/backfill-bed-kinds.ts",
+    "backfill-categories": "tsx scripts/backfill-categories.ts",
     "set-locations": "tsx scripts/set-locations.ts"
   },
   "dependencies": {

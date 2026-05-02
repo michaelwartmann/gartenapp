@@ -2,13 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { createBed } from './actions'
-
-const KIND_OPTIONS: Array<{ value: string; label: string; icon: string }> = [
-  { value: 'beet', label: 'Beet', icon: '🟫' },
-  { value: 'hochbeet', label: 'Hochbeet', icon: '📦' },
-  { value: 'gewaechshaus', label: 'Gewächshaus', icon: '🏠' },
-  { value: 'topf', label: 'Topf', icon: '🪴' },
-]
+import { BED_KINDS } from '@/lib/bedKinds'
 
 export default function AddBedForm() {
   const [open, setOpen] = useState(false)
@@ -66,21 +60,22 @@ export default function AddBedForm() {
         style={{ borderColor: '#E8E6DF', color: '#2C2C2A' }}
         autoFocus
       />
-      <div className="flex gap-2 overflow-x-auto pb-1">
-        {KIND_OPTIONS.map((opt) => {
+      <div className="grid grid-cols-3 gap-2">
+        {BED_KINDS.map((opt) => {
           const active = opt.value === kind
           return (
             <button
               key={opt.value}
               onClick={() => setKind(opt.value)}
-              className="px-3 py-2 rounded-full text-sm font-medium whitespace-nowrap touch-manipulation"
+              className="flex flex-col items-center justify-center gap-1 px-2 py-3 rounded-lg text-xs font-medium min-h-[64px] touch-manipulation"
               style={{
                 backgroundColor: active ? '#4A7C59' : '#FFFFFF',
                 color: active ? '#FFFFFF' : '#2C2C2A',
                 border: `1px solid ${active ? '#4A7C59' : '#E8E6DF'}`,
               }}
             >
-              {opt.icon} {opt.label}
+              <span className="text-xl leading-none">{opt.icon}</span>
+              <span className="text-center leading-tight">{opt.label}</span>
             </button>
           )
         })}

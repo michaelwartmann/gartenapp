@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import type { BedKind } from './bedKinds'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 
@@ -6,11 +7,36 @@ export function supabaseAdmin() {
   return createClient(supabaseUrl, process.env.SUPABASE_SECRET_KEY!)
 }
 
+export type PlantCategory =
+  | 'Gemüse'
+  | 'Kraut'
+  | 'Blume'
+  | 'Obst'
+  | 'Baum'
+  | 'Strauch'
+  | 'Nuss'
+
+export const PLANT_CATEGORIES: PlantCategory[] = [
+  'Gemüse',
+  'Kraut',
+  'Blume',
+  'Obst',
+  'Baum',
+  'Strauch',
+  'Nuss',
+]
+
 export type Plant = {
   id: string
   name: string
   latin_name: string
-  category: 'Gemüse' | 'Kraut' | 'Blume' | 'Obst'
+  category: PlantCategory
+  /**
+   * Multi-category array. `category` is the primary (display + color);
+   * `categories` is what filters search against. Always contains at least
+   * the primary. Stage 7.1 backfilled secondaries from Gemini.
+   */
+  categories: string[] | null
   illustration_url: string | null
   sorte: string
   saatzeit: string
@@ -29,10 +55,11 @@ export type Plant = {
   wirkung: string
   stark_oder_schwachzehrer: string
   family: string | null
+  suitable_bed_kinds: string[] | null
   created_at: string
 }
 
-export type BedKind = 'beet' | 'hochbeet' | 'gewaechshaus' | 'topf'
+export type { BedKind }
 
 export type Bed = {
   id: string

@@ -4,6 +4,55 @@ Alle nennenswerten Änderungen an der Gartenapp, in umgekehrter chronologischer 
 
 ---
 
+## Stage 7.1 — Multi-Category, Findability & Polish (2026-05-01)
+
+Nach Kims Erst-Run kamen sechs Themen auf:
+
+- **Multi-Kategorien:** `plants.categories TEXT[]` neu — eine Pflanze kann unter mehreren Filtern auftauchen. Tomate findet man unter Gemüse *und* Obst, Apfel unter Obst *und* Baum, Lavendel unter Kraut *und* Strauch, Brombeere unter Obst *und* Strauch. `category` bleibt als Display-Primary (Pillen-Farbe). Filter-Logik in `/browse` nutzt `categories.includes(filter)`.
+- **Nuss als 7. Kategorie** (`#A37D5C`) — Walnuss, Haselnuss, Mandel bekommen einen eigenen Filter.
+- **Multi-Pick UI** in `/browse/add`: Toggle-Buttons, ≥1 Pflicht, primary = first picked (mit ★).
+- **AssignBedSheet Polling** für `suitable_bed_kinds` — wenn frisch angelegte Pflanze noch keine KI-Klassifizierung hat, polled das Sheet alle 2.5 s (max 30 s) und sortiert die Beete neu sobald die Daten da sind. Dezenter „✨ KI sortiert noch …"-Hinweis statt Block.
+- **Slider-Fix im Browse-Catalog:** `flex flex-wrap` statt `overflow-x-auto pb-1` — keine horizontalen Slider mehr in den Filter-Pillen.
+- **20 neue Seed-Einträge:** 10 Bäume (Tanne, Fichte, Birke, Eiche, Ahorn, Linde, Eibe, Magnolie, Ginkgo, Kastanie) + 10 Sträucher (Forsythie, Hortensie, Rhododendron, Flieder, Hibiskus, Buchsbaum, Liguster, Schmetterlingsflieder, Schneeball, Spierstrauch). Stage-2-Style. Buchsbaum mit Zünsler-Hinweis.
+- **Backfill-Skript `npm run backfill-categories`** — Gemini ergänzt sekundäre Kategorien für die Bestand-Pflanzen (Apfel→[Obst, Baum], Tomate→[Gemüse, Obst], Brombeere→[Obst, Strauch] etc.). Idempotent, `--dry`-Flag.
+- **Plant-Detail** zeigt Primary-Pille + „auch X"-Chips für Sekundär-Kategorien.
+- **enrichPlant.ts** liefert zusätzlich `categories` (1–3 Werte) — wird beim Anlegen mit der User-Auswahl gemergt (User-Primary bleibt index 0, Gemini-Vorschläge werden ergänzt, cap 3).
+
+Files:
+- `lib/supabase.ts` (PlantCategory + 7 Werte, `Plant.categories`)
+- `lib/enrichPlant.ts` (categories Output + Merge)
+- `app/browse/{SearchFilter,page}.tsx`, `app/browse/add/{AddPlantForm,actions,page}.tsx`
+- `app/garten/plan/{actions,AssignBedSheet,BedCard,AddPlantSheet}.tsx`
+- `app/plants/[id]/page.tsx`, `app/page.tsx`
+- `data/plants.json` (115 → 135), `notes/stage-7_1-schema.sql`
+- `scripts/backfill-categories.ts`, `scripts/seed-plants.ts` (PlantEntry-Type)
+
+---
+
+## Stage 7 — Beete & Kategorien Polish (2026-05-01)
+
+Kim-Feedback nach erstem Hands-On:
+
+- **8 Beet-Arten statt 4:** zusätzlich Fensterbank/Topf innen 🪟, Hydroponik 💧, Rasen/Wiese 🌳 (für Bäume + Sträucher), Kübel 🏺. Single-source-of-truth in `lib/bedKinds.ts`.
+- **Beet-Art-Picker als 3-spaltiges Grid** statt horizontalem Slider — alle Optionen auf einen Blick, keine Scroll-Falle mehr.
+- **✏️-Edit-Knopf neben 🗑️** auf jeder Beet-Karte. Öffnet `EditBedSheet` (Modal mit Label-Input + Kind-Grid + Speichern). `renameBed` zu `updateBed(id, label, kind)` erweitert.
+- **Plant-Kategorien Baum + Strauch** für Zier- und Nutzgehölze (Eiche, Forsythie, Rhodo, Lavendel-Strauch). „Obst" bleibt eßbar — Apfelbaum wandert nicht. Eigene Farben (Baum `#5C7C4A`, Strauch `#8FA376`).
+- **Strukturiertes Feld `plants.suitable_bed_kinds TEXT[]`** — welche Beet-Arten zur Pflanze passen. Gemini-enriched on plant-add + Backfill-Skript `npm run backfill-bed-kinds` für die existierenden 115 Pflanzen.
+- **„Wo kommt das hin?" Sheet** (`AssignBedSheet`) nach Plant-Add: optional, sortiert kompatible Beete oben mit ✓, unpassende mit ⚠. Skip-Button „Nur in Samenvorrat". Greift in zwei Flows: nach manueller Pflanze (`/browse/add`) und auf Plant-Detail bei „🌱 Gepflanzt", wenn der Garten ≥1 Beete hat aber die Pflanze noch keinem Beet zugeordnet ist.
+- **Plant-Detail „🌿 Passt zu"-Chip-Reihe** rendert `suitable_bed_kinds` als Icon-Chips unter dem Detail-Header.
+- **AddPlantSheet (Plan-Picker)** wird Eignung-aware: Pflanzen werden je nach Beet-Kind sortiert und mit ✓/⚠-Markern versehen, plus Toggle „Nur passende anzeigen".
+- **enrichPlant.ts Prompt** ergänzt um Baum/Strauch-Heuristiken (Saatzeit = Pflanzzeit, Schneiden = Schnittart, immer mehrjährig) und das neue `suitable_bed_kinds`-Output-Schema mit Beaufort-artigem Enum-Constraint.
+
+Files:
+- `lib/bedKinds.ts` (neu), `lib/supabase.ts`, `lib/enrichPlant.ts`
+- `app/garten/plan/{actions,AddBedForm,BedCard,EditBedSheet,AddPlantSheet,AssignBedSheet}.tsx`
+- `app/browse/add/{actions,AddPlantForm,AddPlantFlow,page}.tsx`
+- `app/plants/[id]/page.tsx`
+- `app/page.tsx`, `app/browse/SearchFilter.tsx`
+- `scripts/backfill-bed-kinds.ts`, `notes/stage-7-schema.sql`
+
+---
+
 ## Stage 6 — Wetter-Coach (2026-05-01)
 
 7-Tage-Vorhersage über Open-Meteo + Standort-Geocoding via Zippopotam (DE/AT/CH/NL). Severe-Event-Banner für die nächsten 48 h mit zwei Schweregraden:

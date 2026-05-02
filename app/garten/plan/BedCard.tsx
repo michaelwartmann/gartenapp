@@ -12,27 +12,18 @@ import {
   unmarkBedPlantingAsHarvested,
 } from './actions'
 import AddPlantSheet from './AddPlantSheet'
+import EditBedSheet from './EditBedSheet'
 import type { AddPlantingSeason } from './actions'
-
-const KIND_ICONS: Record<string, string> = {
-  beet: '🟫',
-  hochbeet: '📦',
-  gewaechshaus: '🏠',
-  topf: '🪴',
-}
-
-const KIND_LABELS: Record<string, string> = {
-  beet: 'Beet',
-  hochbeet: 'Hochbeet',
-  gewaechshaus: 'Gewächshaus',
-  topf: 'Topf',
-}
+import { bedKindIcon, bedKindLabel } from '@/lib/bedKinds'
 
 const CATEGORY_BG: Record<string, string> = {
   Gemüse: '#4A7C59',
   Kraut: '#C17B5C',
   Blume: '#8B5A95',
   Obst: '#D49C3D',
+  Baum: '#5C7C4A',
+  Strauch: '#8FA376',
+  Nuss: '#A37D5C',
 }
 
 function formatISODate(iso: string | null): string {
@@ -184,6 +175,7 @@ function LastYearChip({
 export default function BedCard({ view }: { view: BedView }) {
   const { bed, current, lastYear } = view
   const [sheetSeason, setSheetSeason] = useState<AddPlantingSeason | null>(null)
+  const [editOpen, setEditOpen] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [pending, startTransition] = useTransition()
   const [busyId, setBusyId] = useState<string | null>(null)
@@ -238,7 +230,7 @@ export default function BedCard({ view }: { view: BedView }) {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 min-w-0">
           <span className="text-2xl shrink-0">
-            {KIND_ICONS[bed.kind] ?? '🟫'}
+            {bedKindIcon(bed.kind)}
           </span>
           <div className="min-w-0">
             <p
@@ -248,19 +240,29 @@ export default function BedCard({ view }: { view: BedView }) {
               {bed.label}
             </p>
             <p className="text-xs" style={{ color: '#888780' }}>
-              {KIND_LABELS[bed.kind] ?? bed.kind}
+              {bedKindLabel(bed.kind)}
             </p>
           </div>
         </div>
         {!confirmDelete ? (
-          <button
-            onClick={() => setConfirmDelete(true)}
-            className="text-sm px-2 py-1 touch-manipulation"
-            style={{ color: '#888780' }}
-            aria-label="Beet löschen"
-          >
-            🗑️
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setEditOpen(true)}
+              className="text-sm px-2 py-1 touch-manipulation"
+              style={{ color: '#888780' }}
+              aria-label="Beet bearbeiten"
+            >
+              ✏️
+            </button>
+            <button
+              onClick={() => setConfirmDelete(true)}
+              className="text-sm px-2 py-1 touch-manipulation"
+              style={{ color: '#888780' }}
+              aria-label="Beet löschen"
+            >
+              🗑️
+            </button>
+          </div>
         ) : (
           <div className="flex items-center gap-2">
             <button
@@ -358,8 +360,18 @@ export default function BedCard({ view }: { view: BedView }) {
         <AddPlantSheet
           bedId={bed.id}
           bedLabel={bed.label}
+          bedKind={bed.kind}
           season={sheetSeason}
           onClose={() => setSheetSeason(null)}
+        />
+      )}
+
+      {editOpen && (
+        <EditBedSheet
+          bedId={bed.id}
+          initialLabel={bed.label}
+          initialKind={bed.kind}
+          onClose={() => setEditOpen(false)}
         />
       )}
     </div>
