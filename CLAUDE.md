@@ -196,7 +196,8 @@ GOOGLE_AI_API_KEY
 11. **Beet-Arten als shared Konstante (Stage 7)**: `lib/bedKinds.ts` ist single source of truth für die 8 Werte; AddBedForm, BedCard, EditBedSheet, AssignBedSheet und der actions-Validator ziehen alle aus derselben Liste. Verhindert Drift.
 12. **`suitable_bed_kinds` als strukturiertes Plant-Feld (Stage 7)**: nicht nur Freitext in „Pflanzort"; AssignBedSheet sortiert nach Eignung, Plan-Picker zeigt ✓/⚠. Gemini-enriched + Backfill-Skript für Bestand.
 13. **Multi-Cat: Findability vor Strenge (Stage 7.1)**: Pflanzen können in mehreren Kategorien gleichzeitig sein. Tomate ist Gemüse *und* Obst, Apfel ist Obst *und* Baum. Filter sucht über den Array, nicht über die Single-Spalte. Primary (= `category`) bleibt für Display und Farbe. Reduziert Klassifizierungs-Streitfragen, hilft beim Suchen.
-14. **Konva, kein use-gesture im MVP (Stage 5B)**: Skizzen-Editor nutzt `react-konva` allein — Konvas eingebautes Drag + `Transformer` reicht für Move + Resize. `@use-gesture/react` würde nur zusätzlichen Layer für Gesten bringen, die wir noch nicht brauchen. Edit-Mode ist *implizit*: jedes Beet ist im Editor immer draggable, ein zweites Tap auf ein selektiertes Beet öffnet das EditBedSheet. Logischer Canvas 480×720 px wird für schmale Screens proportional gescaled, gespeicherte Werte bleiben in logischen px. Töpfe + Kübel rendern als Ellipse, alle anderen Beet-Arten als Rechteck — die Skizze ist sofort lesbar ohne das Label zu lesen.
+14. **Konva, kein use-gesture im MVP (Stage 5B)**: Skizzen-Editor nutzt `react-konva` allein — Konvas eingebautes Drag + `Transformer` reicht für Move + Resize. `@use-gesture/react` würde nur zusätzlichen Layer für Gesten bringen, die wir noch nicht brauchen. Logischer Canvas 480×720 px wird für schmale Screens proportional gescaled, gespeicherte Werte bleiben in logischen px. Töpfe + Kübel rendern als Ellipse, alle anderen Beet-Arten als Rechteck — die Skizze ist sofort lesbar ohne das Label zu lesen.
+15. **Skizze ist die primäre Plan-Ansicht (Stage 8)**: `/garten/plan` mountet den Editor (locked default), Listen-View (BedCard) ist abgelöst durch den Inline-Detail unter dem Canvas. Lock/Edit ist *explizit* via 🔒/🔓-Toggle: Default locked → Single-Tap selektiert → Inline-Detail mit Pflanzen-Chips + ✏️/🗑️-Aktionen. „✏️ Bearbeiten" → Drag/Resize/Rotation an, „✓ Speichern" lockt automatisch zurück. Verhindert versehentliches Verschieben beim normalen Browsen, hält Edit für gezielte Aktionen. Pflanzen-Inhalt eines Beets wird via `<KonvaImage>`-Thumbnails (1–3 Kawaii-PNGs + N-Badge) direkt auf der Bed-Form gerendert — Beet erzählt visuell was drin ist, nicht nur Farbe + Label. Min-Thumb 22 px (sonst hidden, Label bleibt).
 
 ## 🎯 v2 Roadmap
 
@@ -215,13 +216,15 @@ Stages shipped on top of v1.0 — siehe `CHANGELOG.md` für Details:
 - ✅ **Stage 7.1** (2026-05-01): Multi-Category, Findability & Polish — `plants.categories TEXT[]` (Tomate=[Gemüse, Obst], Apfel=[Obst, Baum]), Nuss als 7. Kategorie, Multi-Pick im /browse/add, Filter via `categories.includes`, AssignBedSheet Polling für `suitable_bed_kinds`, Slider-Fix in Browse-Filter (flex-wrap), 20 neue Seed-Pflanzen (Bäume + Sträucher), `npm run backfill-categories`
 - ✅ **Stage 5B** (2026-05-02): Visueller Beet-Editor — Sub-Route `/garten/plan/editor` mit `react-konva` Canvas (480×720 logische px, responsiv gescaled). Beete als Rechtecke (Töpfe + Kübel als Ellipsen), Drag zum Verschieben, Transformer-Eckgriff zum Resizen, zweiter Tap öffnet EditBedSheet. Bestand mit NULL-Koords wird beim ersten Öffnen in 2-Spalten-Kaskade vorpositioniert; ✓ Speichern persistiert via batched `updateBedLayout`. Listen-View bleibt unverändert.
 - ✅ **Stage 5B.1** (2026-05-02): Form-Override + Rotation — `beds.shape` (`'rect' | 'ellipse' | NULL`) und `beds.rotation NUMERIC` neu. Form-Toggle-Chip über dem Canvas wenn ein Beet selektiert ist (Override des Kind-Defaults), Konva-Transformer mit `rotateEnabled`, Rotation-Reset-Knopf wenn ≠ 0.
+- ✅ **Stage 8** (2026-05-03): Plan-Page Polish — Skizze wird zur primären Plan-Ansicht. Lock-Toggle 🔒/🔓 (Default locked: nur Tap-to-select, kein Drag). Inline-Beet-Detail unter Canvas (Pflanzen-Chips + ✏️/🗑️-Aktionen) wenn ein Beet selektiert ist. Pflanzen-Thumbnails (`<KonvaImage>` via `use-image`) auf den Bed-Formen, bis 3 + N-Badge, min 22 px (sonst hidden). `BedCard.tsx` ist abgelöst durch `BedInlineView.tsx`, Chips in shared `PlantChips.tsx`. `/garten/plan/editor` ist Redirect-Stub.
 
 Next up:
 
-1. **Stage 5A.2** — expliziter „🌱→📦 Umpflanzen"-Knopf (Vorzucht → Hauptbeet) für Februar 2027 wenn Vorzucht-Saison startet.
-2. **Stage 5C** — Foto-Hintergrund pro Garten (Storage-Subfolder `garden-bg/`, Konva-Image-Layer mit Opazitäts-Slider). Architektur ist von 5B vorbereitet.
-3. **Stage 4C** (optional) — push notifications / email reminders driven off the daily-tasks pipeline.
-4. **Filter/sort** the catalog by any of the 16 botanical dimensions.
+1. **Stage 9** — Ernte-Tracking als Verlaufs-Erfassung statt binärem Flag: neue `harvests`-Tabelle (event log), `plants.harvest_unit` via Gemini-Backfill (`kg`/`bund`/`schnitt`/`kopf`/`stueck`/`schale`), HarvestSheet mit Quick-Buttons für continuous-harvest (Pflücksalat, Schnittlauch, Tomate). „Pflanze raus" als sekundäre Sheet-Aktion.
+2. **Stage 5A.2** — expliziter „🌱→📦 Umpflanzen"-Knopf (Vorzucht → Hauptbeet) für Februar 2027 wenn Vorzucht-Saison startet.
+3. **Stage 5C** — Foto-Hintergrund pro Garten (Storage-Subfolder `garden-bg/`, Konva-Image-Layer mit Opazitäts-Slider). Architektur ist von 5B vorbereitet.
+4. **Stage 4C** (optional) — push notifications / email reminders driven off the daily-tasks pipeline.
+5. **Filter/sort** the catalog by any of the 16 botanical dimensions.
 
 ## 🧪 Release-Readiness
 

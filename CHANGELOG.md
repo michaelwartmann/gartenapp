@@ -4,6 +4,30 @@ Alle nennenswerten Änderungen an der Gartenapp, in umgekehrter chronologischer 
 
 ---
 
+## Stage 8 — Plan-Page Polish: Lock + Inline-Detail + Pflanzen-Thumbs (2026-05-03)
+
+Drei Brainstorm-Ideen aus Kim-Feedback in einem Push: die Skizze sollte „lockable" sein, beim Tappen eines Beets sollte der Beet-Inhalt sofort sichtbar werden, und die Beete sollten ihre Pflanzen visuell zeigen — nicht nur Farbe + Label.
+
+- **Editor wird zur primären Plan-Ansicht** — `/garten/plan` mountet jetzt den Editor (locked default), `/garten/plan/editor` ist nur noch ein Redirect für alte Bookmarks. Eine Wahrheit, ein Renderpfad. Listen-View (`BedCard.tsx`) ist weg.
+- **Lock-Toggle 🔒/🔓** — Default locked: Beete sind nicht draggable, kein Transformer, Single-Tap selektiert. „✏️ Bearbeiten" schaltet auf unlocked → Drag/Resize/Rotation/ShapeToggle aktiv. „✓ Speichern" lockt automatisch zurück. „Verwerfen" rollt back + lockt.
+- **Inline-Beet-Detail unter dem Canvas** (`BedInlineView.tsx`) — wenn locked + ein Beet selektiert: kompakter Beet-Block mit Header (✏️ Label/Kind editieren, 🗑️ löschen) + „Diese Saison" Chips (reused via shared `PlantChips.tsx`) + collapsible „Letztes Jahr".
+- **Pflanzen-Thumbnails auf der Skizze** (`PlantThumbnails.tsx`) — bis zu 3 Kawaii-Bilder pro Beet via `useImage`, +N-Badge bei mehr. Min-Größe 22 px (sonst hidden, Label bleibt). Greyed wenn nicht gepflanzt oder geerntet. Rendert über `<KonvaImage>` mit White-Background-Card für Lesbarkeit.
+- **Label-Position adaptiv** — wenn Beet Pflanzen hat: Label rückt nach oben (rechts vom Kind-Icon, ellipsized), Bilder unten. Ohne Pflanzen: Label bleibt zentriert wie in 5B.
+- **Touch-Action conditional** — `manipulation` im Lock-Mode (Page-Scroll funktioniert), `none` im Edit-Mode (Drag konkurriert nicht mit Scroll).
+- **Shared Chips** (`PlantChips.tsx`) — `CurrentChip` und `LastYearChip` aus dem alten BedCard extrahiert, in `BedInlineView` reused.
+
+Files:
+- `app/garten/plan/page.tsx` (komplett umgeschrieben — mountet Editor)
+- `app/garten/plan/editor/page.tsx` (Redirect-Stub)
+- `app/garten/plan/editor/{EditorClient,BedCanvas}.tsx` (Lock-Mode + Thumbs-Prop + Selection-Logik)
+- `app/garten/plan/editor/BedInlineView.tsx` (neu)
+- `app/garten/plan/editor/PlantThumbnails.tsx` (neu)
+- `app/garten/plan/PlantChips.tsx` (neu, extrahiert aus BedCard)
+- `app/garten/plan/BedCard.tsx` (gelöscht — durch BedInlineView abgelöst)
+- `package.json` (`use-image`)
+
+---
+
 ## Stage 5B.1 — Form-Override + Rotation (2026-05-02)
 
 Direkt nach 5B aufgekommen: Beet-Form sollte sich pro Beet manuell setzen lassen (Hochbeet kann oval angelegt werden, Topf rechteckig), und Beete sollten sich drehen lassen damit die Skizze Garten-Geometrie abbilden kann.
