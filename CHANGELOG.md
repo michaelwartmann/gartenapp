@@ -4,6 +4,25 @@ Alle nennenswerten Änderungen an der Gartenapp, in umgekehrter chronologischer 
 
 ---
 
+## Stage 12 — Catalog-Filter erweitert (2026-05-03)
+
+`/browse` hatte bisher Suche + Single-Cat-Pills + „+ Pflanze fehlt?". Stage 12 fügt fünf strukturierte Smart-Filter hinzu, die über die bereits geladenen Plant-Felder client-seitig aggregieren — kein Schema, kein Server-Roundtrip.
+
+- **Neuer collapsibler Filter-Panel** unter den Kategorie-Pills, geöffnet via „🔍 Filter (n)"-Knopf (Counter zeigt aktive Filter). Default eingeklappt — ohne Filter sieht die Browse-Seite genau aus wie vorher.
+- **5 Filter-Achsen:**
+  - **🌱 Saatzeit** — Monats-Picker (Jan…Dez), Substring-Match auf `plants.saatzeit`
+  - **🌾 Erntezeit** — Monats-Picker, Substring-Match auf `plants.ernte`
+  - **Lebenszyklus** — Pill-Trio (einjährig/zweijährig/mehrjährig), Substring-Match auf `plants.einjaehrig_oder_mehrjaehrig`
+  - **Zehrertyp** — Pill-Trio (Stark/Mittel/Schwach), Substring-Match auf `plants.stark_oder_schwachzehrer`
+  - **Standort** — Pill-Trio (sonnig/halbschattig/schattig), Substring-Match auf `plants.pflanzort` + `witterung`
+- **Active-Filter-Chips** über dem Pflanzen-Grid mit ✕-Knopf zum einzeln entfernen + „alle zurücksetzen"-Link.
+- **AND-Logik:** alle aktiven Filter müssen treffen. Free-Text-Suche bleibt zusätzlich, deckt die anderen 11 Felder ab.
+
+Files:
+- `app/browse/SearchFilter.tsx` — Filter-State + UI-Sektion, drei kleine Helper-Components (`FilterMonthPicker`, `FilterPillRow`, `ActiveChip`)
+
+---
+
 ## Stage 11 — Editor-Polish (2026-05-03)
 
 Drei Live-Test-Stolpersteine, in einem Push abgeräumt — keine Schema-Änderung.

@@ -18,6 +18,38 @@ const CATEGORIES = [
 ] as const
 type Category = (typeof CATEGORIES)[number]
 
+// Stage 12 — smart filter sets
+const MONTHS = [
+  'Januar', 'Februar', 'März', 'April', 'Mai', 'Juni',
+  'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember',
+] as const
+type Month = (typeof MONTHS)[number]
+
+const LIFECYCLES = ['einjährig', 'zweijährig', 'mehrjährig'] as const
+type Lifecycle = (typeof LIFECYCLES)[number]
+
+const NUTRIENTS = ['Starkzehrer', 'Mittelzehrer', 'Schwachzehrer'] as const
+type Nutrient = (typeof NUTRIENTS)[number]
+
+const LIGHTS = ['sonnig', 'halbschattig', 'schattig'] as const
+type Light = (typeof LIGHTS)[number]
+
+type SmartFilters = {
+  seedMonth: Month | null
+  harvestMonth: Month | null
+  lifecycle: Lifecycle | null
+  nutrient: Nutrient | null
+  light: Light | null
+}
+
+const EMPTY_FILTERS: SmartFilters = {
+  seedMonth: null,
+  harvestMonth: null,
+  lifecycle: null,
+  nutrient: null,
+  light: null,
+}
+
 function categoryColor(cat: string): string {
   switch (cat) {
     case 'Gemüse': return '#4A7C59'
@@ -33,12 +65,46 @@ function categoryColor(cat: string): string {
 
 function plantMatchesCategory(p: Plant, category: Category): boolean {
   if (category === 'Alle') return true
-  // Multi-cat lookup with legacy fallback for plants whose array hasn't
-  // been backfilled yet (categories === null).
   if (p.categories && p.categories.length > 0) {
     return p.categories.includes(category)
   }
   return p.category === category
+}
+
+function lower(s: string | null | undefined): string {
+  return (s ?? '').toLowerCase()
+}
+
+function plantMatchesSmart(p: Plant, f: SmartFilters): boolean {
+  if (f.seedMonth && !lower(p.saatzeit).includes(f.seedMonth.toLowerCase())) {
+    return false
+  }
+  if (f.harvestMonth && !lower(p.ernte).includes(f.harvestMonth.toLowerCase())) {
+    return false
+  }
+  if (f.lifecycle) {
+    const v = lower(p.einjaehrig_oder_mehrjaehrig)
+    if (!v.includes(f.lifecycle.toLowerCase())) return false
+  }
+  if (f.nutrient) {
+    const v = lower(p.stark_oder_schwachzehrer)
+    if (!v.includes(f.nutrient.toLowerCase())) return false
+  }
+  if (f.light) {
+    const v = lower(p.pflanzort) + ' ' + lower(p.witterung)
+    if (!v.includes(f.light.toLowerCase())) return false
+  }
+  return true
+}
+
+function activeSmartCount(f: SmartFilters): number {
+  return (
+    (f.seedMonth ? 1 : 0) +
+    (f.harvestMonth ? 1 : 0) +
+    (f.lifecycle ? 1 : 0) +
+    (f.nutrient ? 1 : 0) +
+    (f.light ? 1 : 0)
+  )
 }
 
 type Props = {
@@ -49,23 +115,28 @@ type Props = {
 export default function SearchFilter({ plants, inGardenIds }: Props) {
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState<Category>('Alle')
+  const [smart, setSmart] = useState<SmartFilters>(EMPTY_FILTERS)
+  const [filterPanelOpen, setFilterPanelOpen] = useState(false)
   const [pendingId, setPendingId] = useState<string | null>(null)
   const [, startTransition] = useTransition()
   const [optimisticIn, setOptimisticIn] = useState<Set<string>>(
     new Set(inGardenIds)
   )
 
+  const smartCount = activeSmartCount(smart)
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
     return plants.filter((p) => {
       if (!plantMatchesCategory(p, category)) return false
+      if (!plantMatchesSmart(p, smart)) return false
       if (!q) return true
       return (
         p.name.toLowerCase().includes(q) ||
         p.latin_name.toLowerCase().includes(q)
       )
     })
-  }, [plants, query, category])
+  }, [plants, query, category, smart])
 
   function toggle(plant: Plant) {
     const isIn = optimisticIn.has(plant.id)
@@ -80,12 +151,19 @@ export default function SearchFilter({ plants, inGardenIds }: Props) {
         ? await removeFromGarden(plant.id)
         : await addToGarden(plant.id)
       if ('error' in result) {
-        // revert on failure
         const revert = new Set(optimisticIn)
         setOptimisticIn(revert)
       }
       setPendingId(null)
     })
+  }
+
+  function clearSmart<K extends keyof SmartFilters>(key: K) {
+    setSmart((s) => ({ ...s, [key]: null }))
+  }
+
+  function clearAllSmart() {
+    setSmart(EMPTY_FILTERS)
   }
 
   return (
@@ -99,6 +177,7 @@ export default function SearchFilter({ plants, inGardenIds }: Props) {
           className="w-full px-4 py-3 rounded-xl border bg-white text-base focus:outline-none min-h-[48px]"
           style={{ borderColor: '#E8E6DF', color: '#2C2C2A' }}
         />
+
         <div className="flex flex-wrap gap-2">
           {CATEGORIES.map((cat) => {
             const active = cat === category
@@ -118,6 +197,106 @@ export default function SearchFilter({ plants, inGardenIds }: Props) {
             )
           })}
         </div>
+
+        {/* Stage 12 — Smart-Filter Panel (collapsible) */}
+        <div>
+          <button
+            type="button"
+            onClick={() => setFilterPanelOpen((v) => !v)}
+            className="text-xs font-medium px-3 py-1.5 rounded-full border touch-manipulation flex items-center gap-1.5"
+            style={{
+              color: '#4A7C59',
+              borderColor: '#C9DCC9',
+              backgroundColor: smartCount > 0 ? '#F0F5F0' : '#FFFFFF',
+            }}
+            aria-expanded={filterPanelOpen}
+          >
+            🔍 Filter{smartCount > 0 ? ` (${smartCount})` : ''}{' '}
+            <span style={{ color: '#888780' }}>
+              {filterPanelOpen ? '▴' : '▾'}
+            </span>
+          </button>
+
+          {filterPanelOpen && (
+            <div
+              className="mt-2 rounded-xl border bg-white p-3 space-y-3"
+              style={{ borderColor: '#E8E6DF' }}
+            >
+              <FilterMonthPicker
+                label="🌱 Saatzeit"
+                value={smart.seedMonth}
+                onChange={(v) => setSmart((s) => ({ ...s, seedMonth: v }))}
+              />
+              <FilterMonthPicker
+                label="🌾 Erntezeit"
+                value={smart.harvestMonth}
+                onChange={(v) => setSmart((s) => ({ ...s, harvestMonth: v }))}
+              />
+              <FilterPillRow
+                label="Lebenszyklus"
+                options={LIFECYCLES}
+                value={smart.lifecycle}
+                onChange={(v) => setSmart((s) => ({ ...s, lifecycle: v }))}
+              />
+              <FilterPillRow
+                label="Zehrertyp"
+                options={NUTRIENTS}
+                value={smart.nutrient}
+                onChange={(v) => setSmart((s) => ({ ...s, nutrient: v }))}
+              />
+              <FilterPillRow
+                label="Standort"
+                options={LIGHTS}
+                value={smart.light}
+                onChange={(v) => setSmart((s) => ({ ...s, light: v }))}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Active-filter chips */}
+        {smartCount > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            {smart.seedMonth && (
+              <ActiveChip
+                label={`Saat: ${smart.seedMonth}`}
+                onRemove={() => clearSmart('seedMonth')}
+              />
+            )}
+            {smart.harvestMonth && (
+              <ActiveChip
+                label={`Ernte: ${smart.harvestMonth}`}
+                onRemove={() => clearSmart('harvestMonth')}
+              />
+            )}
+            {smart.lifecycle && (
+              <ActiveChip
+                label={smart.lifecycle}
+                onRemove={() => clearSmart('lifecycle')}
+              />
+            )}
+            {smart.nutrient && (
+              <ActiveChip
+                label={smart.nutrient}
+                onRemove={() => clearSmart('nutrient')}
+              />
+            )}
+            {smart.light && (
+              <ActiveChip
+                label={smart.light}
+                onRemove={() => clearSmart('light')}
+              />
+            )}
+            <button
+              onClick={clearAllSmart}
+              className="text-xs px-2 py-1 touch-manipulation"
+              style={{ color: '#888780' }}
+            >
+              alle zurücksetzen
+            </button>
+          </div>
+        )}
+
         <div className="flex items-center justify-between gap-3">
           <p className="text-xs" style={{ color: '#888780' }}>
             {filtered.length} {filtered.length === 1 ? 'Pflanze' : 'Pflanzen'}
@@ -218,5 +397,110 @@ export default function SearchFilter({ plants, inGardenIds }: Props) {
         </div>
       )}
     </div>
+  )
+}
+
+function FilterMonthPicker({
+  label,
+  value,
+  onChange,
+}: {
+  label: string
+  value: Month | null
+  onChange: (v: Month | null) => void
+}) {
+  return (
+    <div>
+      <p
+        className="text-[11px] uppercase tracking-wide font-medium mb-1.5"
+        style={{ color: '#888780' }}
+      >
+        {label}
+      </p>
+      <select
+        value={value ?? ''}
+        onChange={(e) =>
+          onChange(e.target.value === '' ? null : (e.target.value as Month))
+        }
+        className="w-full px-3 py-2 rounded-lg border bg-white text-sm min-h-[40px] focus:outline-none"
+        style={{ borderColor: '#E8E6DF', color: value ? '#2C2C2A' : '#888780' }}
+      >
+        <option value="">— alle Monate —</option>
+        {MONTHS.map((m) => (
+          <option key={m} value={m}>
+            {m}
+          </option>
+        ))}
+      </select>
+    </div>
+  )
+}
+
+function FilterPillRow<T extends string>({
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  label: string
+  options: readonly T[]
+  value: T | null
+  onChange: (v: T | null) => void
+}) {
+  return (
+    <div>
+      <p
+        className="text-[11px] uppercase tracking-wide font-medium mb-1.5"
+        style={{ color: '#888780' }}
+      >
+        {label}
+      </p>
+      <div className="flex flex-wrap gap-1.5">
+        {options.map((opt) => {
+          const active = opt === value
+          return (
+            <button
+              key={opt}
+              type="button"
+              onClick={() => onChange(active ? null : opt)}
+              className="px-3 py-1.5 rounded-full text-xs font-medium touch-manipulation"
+              style={{
+                backgroundColor: active ? '#4A7C59' : '#FFFFFF',
+                color: active ? '#FFFFFF' : '#2C2C2A',
+                border: `1px solid ${active ? '#4A7C59' : '#E8E6DF'}`,
+              }}
+              aria-pressed={active}
+            >
+              {opt}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function ActiveChip({
+  label,
+  onRemove,
+}: {
+  label: string
+  onRemove: () => void
+}) {
+  return (
+    <span
+      className="inline-flex items-center gap-1 rounded-full pl-2.5 pr-1 py-1 text-xs"
+      style={{ backgroundColor: '#F0F5F0', color: '#4A7C59' }}
+    >
+      {label}
+      <button
+        onClick={onRemove}
+        className="w-5 h-5 rounded-full flex items-center justify-center text-xs touch-manipulation"
+        style={{ color: '#4A7C59' }}
+        aria-label={`Filter ${label} entfernen`}
+      >
+        ✕
+      </button>
+    </span>
   )
 }
