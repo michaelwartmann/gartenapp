@@ -107,6 +107,12 @@ export type BedPlanting = {
   season_year: number
   planted_at: string | null
   removed_at: string | null
+  /**
+   * Stage 10 — why the planting was ended (Lerntagebuch). NULL for legacy
+   * `removed_at`-without-reason rows. See `lib/removedReasons.ts` for valid
+   * values.
+   */
+  removed_reason: string | null
   notes: string | null
   created_at: string
 }

@@ -10,6 +10,7 @@ import {
   harvestUnitMeta,
   type HarvestUnit,
 } from '@/lib/harvestUnits'
+import { REMOVED_REASONS, type RemovedReasonKey } from '@/lib/removedReasons'
 
 type Props = {
   plantingId: string
@@ -55,10 +56,15 @@ export default function HarvestSheet({
   const [notes, setNotes] = useState<string>('')
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
+  // Stage 10 — when "Pflanze raus" is tapped, expand a reason picker.
+  const [reasonPickerOpen, setReasonPickerOpen] = useState(false)
 
   const meta = harvestUnitMeta(unit)
 
-  function submit(amount: number, opts: { endPlanting: boolean }) {
+  function submit(
+    amount: number,
+    opts: { endPlanting: boolean; removedReason?: RemovedReasonKey }
+  ) {
     setError(null)
     startTransition(async () => {
       const res = await recordHarvest({
@@ -68,6 +74,7 @@ export default function HarvestSheet({
         date,
         notes: notes.trim() || null,
         endPlanting: opts.endPlanting,
+        removedReason: opts.removedReason ?? null,
       })
       if ('error' in res) {
         setError(
@@ -97,10 +104,10 @@ export default function HarvestSheet({
     submit(n, { endPlanting: false })
   }
 
-  function endPlanting() {
+  function endPlantingWithReason(reasonKey: RemovedReasonKey) {
     const n = Number(amountText.replace(',', '.'))
     const amount = Number.isFinite(n) && n >= 0 ? n : 0
-    submit(amount, { endPlanting: true })
+    submit(amount, { endPlanting: true, removedReason: reasonKey })
   }
 
   return (
@@ -274,7 +281,7 @@ export default function HarvestSheet({
           <button
             type="button"
             onClick={manualSave}
-            disabled={pending || amountText.trim() === ''}
+            disabled={pending || amountText.trim() === '' || reasonPickerOpen}
             className="flex-1 px-3 py-3 rounded-lg text-white text-sm font-medium min-h-[48px] touch-manipulation disabled:opacity-40"
             style={{ backgroundColor: '#4A7C59' }}
           >
@@ -282,22 +289,68 @@ export default function HarvestSheet({
           </button>
           <button
             type="button"
-            onClick={endPlanting}
+            onClick={() => setReasonPickerOpen((v) => !v)}
             disabled={pending}
             className="flex-1 px-3 py-3 rounded-lg text-sm font-medium border min-h-[48px] touch-manipulation disabled:opacity-60"
             style={{
               color: '#C17B5C',
-              borderColor: '#F2D8CD',
-              backgroundColor: '#FFFFFF',
+              borderColor: reasonPickerOpen ? '#C17B5C' : '#F2D8CD',
+              backgroundColor: reasonPickerOpen ? '#FBF2EE' : '#FFFFFF',
             }}
             title="Letzte Ernte für diese Pflanze + raus aus dem Beet"
+            aria-expanded={reasonPickerOpen}
           >
-            🪦 Pflanze raus
+            🪦 Pflanze raus{reasonPickerOpen ? ' ▴' : ' ▾'}
           </button>
         </div>
+
+        {reasonPickerOpen && (
+          <div
+            className="rounded-lg border p-3 space-y-2"
+            style={{ backgroundColor: '#FFFFFF', borderColor: '#E8E6DF' }}
+          >
+            <p className="text-xs leading-relaxed" style={{ color: '#888780' }}>
+              Warum geht die Pflanze raus? Tap = sofort speichern.
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              {REMOVED_REASONS.map((r) => (
+                <button
+                  key={r.key}
+                  type="button"
+                  onClick={() => endPlantingWithReason(r.key)}
+                  disabled={pending}
+                  className="px-2 py-2 rounded-lg text-xs font-medium border touch-manipulation min-h-[40px] flex items-center justify-center gap-1.5 disabled:opacity-60"
+                  style={{
+                    borderColor:
+                      r.tone === 'positive'
+                        ? '#C9DCC9'
+                        : r.tone === 'loss'
+                        ? '#F2D8CD'
+                        : r.tone === 'event'
+                        ? '#DDE3EA'
+                        : '#E8E6DF',
+                    backgroundColor:
+                      r.tone === 'positive'
+                        ? '#F0F5F0'
+                        : r.tone === 'loss'
+                        ? '#FBF2EE'
+                        : r.tone === 'event'
+                        ? '#F4F6F9'
+                        : '#FAFAF7',
+                    color: '#2C2C2A',
+                  }}
+                >
+                  <span>{r.emoji}</span>
+                  <span>{r.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         <p className="text-[11px] leading-relaxed" style={{ color: '#888780' }}>
           „Sichern" loggt die Ernte und die Pflanze bleibt aktiv.
-          „Pflanze raus" loggt zusätzlich das Saison-Ende.
+          „Pflanze raus" beendet die Saison mit Grund.
         </p>
       </div>
     </div>
