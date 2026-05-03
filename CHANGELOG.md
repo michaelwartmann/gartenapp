@@ -4,6 +4,36 @@ Alle nennenswerten Änderungen an der Gartenapp, in umgekehrter chronologischer 
 
 ---
 
+## Stage 5C — Eigener Foto-Hintergrund pro Garten (2026-05-03)
+
+Stage 8.1 hat 6 kuratierte Themes geliefert; 5C macht den Hintergrund persönlich. Architektur war bereits vorbereitet (Konva bottom-Layer, `gardens.background_key`-Schema, Picker-Sheet) — alles eingesteckt + Upload-Pipeline gebaut.
+
+- **Schema-Erweiterung** — `gardens.background_url TEXT` (Public-CDN-URL zur eigenen Foto-Datei) + `gardens.background_opacity NUMERIC` (0..1, NULL = Theme-Default 0.55). Storage-Bucket `garden-bg` (Public, analog zu `illustrations/`) wird in derselben Migration angelegt.
+- **`'custom'` als Background-Key** — `lib/canvasBackgrounds.ts` mit neuer `customBackground(url, opacity)`-Funktion und `CUSTOM_BACKGROUND_DEFAULT_OPACITY`. Server validiert beim `setGardenBackground('custom')`-Call dass eine URL existiert (sonst `invalid`).
+- **Server-Actions:**
+  - `uploadGardenBackground(formData)` — empfängt komprimierte Datei, lädt in Storage unter `gardens/{id}.{ext}`, setzt `background_key='custom' + background_url`. Räumt vorhandene Files unter anderen Extensions auf, um eindeutige URLs zu garantieren. Cache-Bust per `?v={timestamp}`. Max 1.5 MB nach Client-Compress, akzeptiert `image/webp|jpeg|png`.
+  - `removeCustomGardenBackground()` — löscht alle Files unter `gardens/{id}.*` aus Storage und cleart key/url/opacity.
+  - `setCustomBackgroundOpacity(opacity)` — clampt 0..1, persistiert.
+  - `getGardenBackgroundConfig()` ersetzt `getGardenBackgroundKey()` — liefert key + url + opacity in einem Call.
+- **Client-Side Compression** in `BackgroundPicker.tsx`: File-Reader → Image-Decode → Canvas-Resize auf 768 px Longest-Side → `canvas.toBlob('image/webp', 0.78)`. Fallback auf JPEG wenn WebP-Encode fehlt, ansonsten Original. Kein Server-side Image-Processing nötig — User-Bandbreite + iOS-Privacy-friendly.
+- **Picker-UI erweitert:** Custom-Tile (📸) als 8. Eintrag im 2-Spalten-Grid. Wenn kein Foto: „Eigenes Foto hochladen"-Placeholder. Wenn Foto vorhanden: das Foto selbst als Vorschau. Bei aktivem Custom: Opacity-Slider (0–100%, 5er-Schritte, Commit auf `mouseup`/`touchend` damit Drag flüssig bleibt) + 🗑️ Entfernen-Knopf.
+- **CanvasBackground-Branch** — wenn `key='custom'` und `customUrl` da: rendert über `customBackground(...)`, sonst Theme-Lookup wie gehabt. Cover-Fit + Opacity bleiben identisch.
+- **Props-Pipe:** page.tsx → EditorClient → BedCanvas → CanvasBackground reicht jetzt customBackgroundUrl + customBackgroundOpacity durch. Picker bekommt sie zusätzlich für die Slider-Initialisierung.
+
+Files:
+- `notes/stage-5c-schema.sql` (neu) — Schema + Storage-Bucket
+- `lib/canvasBackgrounds.ts` — `'custom'` Key + `customBackground()` Helper
+- `lib/supabase.ts` — `Garden.background_url` + `background_opacity`
+- `app/garten/plan/actions.ts` — 4 neue Actions + `getGardenBackgroundKey` → `getGardenBackgroundConfig`
+- `app/garten/plan/BackgroundPicker.tsx` — Upload-Tile, Compression, Slider, Remove
+- `app/garten/plan/editor/CanvasBackground.tsx` — Custom-Branch
+- `app/garten/plan/editor/{EditorClient,BedCanvas}.tsx` — Props-Erweiterung
+- `app/garten/plan/page.tsx` — Loader-Switch
+
+Schema-Migration via Supabase SQL-Editor anwenden (auch der Storage-Bucket-Insert ist drin) bevor der erste Foto-Upload-Versuch läuft.
+
+---
+
 ## Stage 10 — Garten-Bilanz mit Lerntagebuch-Framing (2026-05-03)
 
 Mit Stage 9 sammeln wir Ernte-Daten — Stage 10 macht sie sichtbar. Aber nicht als Erfolgs-Scorecard: Kim hat explizit „Ertrag im Sinne von Lernen" gesagt, also sind Misserfolge gleich wichtig wie Erträge. Wenn eine Pflanze stirbt, ist das ein Datenpunkt für nächste Saison.

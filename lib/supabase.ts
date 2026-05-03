@@ -125,6 +125,10 @@ export type Garden = {
   weekly_tasks_cache_date: string | null
   /** Stage 8.1 — curated Skizzen-Hintergrund. NULL = Standard (off-white). */
   background_key: string | null
+  /** Stage 5C — Public Storage URL when background_key='custom'. NULL otherwise. */
+  background_url: string | null
+  /** Stage 5C — User-controlled opacity for custom photo (0..1). NULL = theme default. */
+  background_opacity: number | null
 }
 
 export type GardenPlant = {

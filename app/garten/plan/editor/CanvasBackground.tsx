@@ -3,20 +3,34 @@
 import { Group, Image as KonvaImage, Rect } from 'react-konva'
 import useImage from 'use-image'
 import { CANVAS_W, CANVAS_H } from './autoLayout'
-import { backgroundFor } from '@/lib/canvasBackgrounds'
+import { backgroundFor, customBackground } from '@/lib/canvasBackgrounds'
 
 type Props = {
   /** Stored key from `gardens.background_key` (NULL → 'default'). */
   backgroundKey: string | null
+  /** Stage 5C — when key='custom', this URL is used. */
+  customUrl?: string | null
+  /** Stage 5C — user-controlled opacity for custom photo (0..1). */
+  customOpacity?: number | null
 }
 
 /**
- * Stage 8.1 — bottom Konva layer that paints the curated theme behind
- * the beds. Uses `cover`-style fitting (canvas is taller than the source
- * square; we crop the sides instead of stretching).
+ * Bottom Konva layer that paints the chosen theme — Stage 8.1 added the
+ * 6 curated themes; Stage 5C added user-uploaded photos under key='custom'
+ * (URL + opacity sit on the garden row instead of the static lookup).
+ *
+ * Uses `cover`-style fitting (canvas is taller than the source square; we
+ * crop the sides instead of stretching).
  */
-export default function CanvasBackground({ backgroundKey }: Props) {
-  const bg = backgroundFor(backgroundKey)
+export default function CanvasBackground({
+  backgroundKey,
+  customUrl,
+  customOpacity,
+}: Props) {
+  const bg =
+    backgroundKey === 'custom' && customUrl
+      ? customBackground(customUrl, customOpacity ?? null)
+      : backgroundFor(backgroundKey)
   const [img] = useImage(bg.path ?? '', 'anonymous')
 
   if (!bg.path) {
@@ -31,7 +45,7 @@ export default function CanvasBackground({ backgroundKey }: Props) {
   }
 
   if (!img) {
-    // Solid base while the WebP loads, so the canvas isn't transparent
+    // Solid base while the image loads, so the canvas isn't transparent
     return (
       <Rect
         width={CANVAS_W}

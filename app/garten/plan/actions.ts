@@ -953,17 +953,35 @@ export async function listBedsContainingPlant(
 // Stage 8.1 — Skizzen-Hintergrund (curated themes, per-garden)
 // ─────────────────────────────────────────────────────────────────────────
 
-export async function getGardenBackgroundKey(): Promise<string | null> {
+export type GardenBackgroundConfig = {
+  key: string | null
+  url: string | null
+  opacity: number | null
+}
+
+export async function getGardenBackgroundConfig(): Promise<GardenBackgroundConfig> {
   const gardenId = await getCurrentGardenId()
-  if (!gardenId) return null
+  if (!gardenId) return { key: null, url: null, opacity: null }
   const supabase = adminClient()
   const { data, error } = await supabase
     .from('gardens')
-    .select('background_key')
+    .select('background_key, background_url, background_opacity')
     .eq('id', gardenId)
     .single()
-  if (error || !data) return null
-  return (data as { background_key: string | null }).background_key
+  if (error || !data) return { key: null, url: null, opacity: null }
+  const row = data as {
+    background_key: string | null
+    background_url: string | null
+    background_opacity: number | string | null
+  }
+  return {
+    key: row.background_key,
+    url: row.background_url,
+    opacity:
+      row.background_opacity === null || row.background_opacity === undefined
+        ? null
+        : Number(row.background_opacity),
+  }
 }
 
 export type SetBackgroundResult =
@@ -981,6 +999,18 @@ export async function setGardenBackground(
     if (!isValidBackgroundKey(key)) return { error: 'invalid' }
     // 'default' is the no-image option; persist as NULL so the column reflects it.
     stored = key === 'default' ? null : key
+    // Stage 5C — switching to 'custom' without an URL on file is invalid;
+    // user must upload first via uploadGardenBackground.
+    if (stored === 'custom') {
+      const supabase = adminClient()
+      const { data } = await supabase
+        .from('gardens')
+        .select('background_url')
+        .eq('id', gardenId)
+        .single()
+      const url = (data as { background_url: string | null } | null)?.background_url
+      if (!url) return { error: 'invalid' }
+    }
   }
   const supabase = adminClient()
   const { error } = await supabase
@@ -989,6 +1019,133 @@ export async function setGardenBackground(
     .eq('id', gardenId)
   if (error) {
     console.error('setGardenBackground failed:', error)
+    return { error: 'server' }
+  }
+  revalidatePath('/garten/plan')
+  return { ok: true }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Stage 5C — Eigener Foto-Hintergrund (upload + remove + opacity slider)
+// ─────────────────────────────────────────────────────────────────────────
+
+const STORAGE_BUCKET = 'garden-bg'
+const MAX_UPLOAD_BYTES = 1_500_000 // ~1.5 MB after client-side compression
+const ACCEPTED_MIME = new Set([
+  'image/webp',
+  'image/jpeg',
+  'image/png',
+])
+
+export type UploadBackgroundResult =
+  | { ok: true; url: string }
+  | { error: 'no-garden' | 'invalid' | 'too-large' | 'server' }
+
+export async function uploadGardenBackground(
+  formData: FormData
+): Promise<UploadBackgroundResult> {
+  const gardenId = await getCurrentGardenId()
+  if (!gardenId) return { error: 'no-garden' }
+
+  const file = formData.get('file')
+  if (!(file instanceof Blob)) return { error: 'invalid' }
+  if (file.size === 0) return { error: 'invalid' }
+  if (file.size > MAX_UPLOAD_BYTES) return { error: 'too-large' }
+  const mime = file.type || 'image/webp'
+  if (!ACCEPTED_MIME.has(mime)) return { error: 'invalid' }
+
+  const supabase = adminClient()
+  // Path is per-garden, no extension — Storage can serve any MIME via the
+  // contentType meta. WebP is the expected client-side output but we also
+  // accept JPEG/PNG as fallback for browsers without canvas.toBlob('webp').
+  const ext = mime === 'image/jpeg' ? 'jpg' : mime === 'image/png' ? 'png' : 'webp'
+  const filePath = `gardens/${gardenId}.${ext}`
+
+  // Clean up any prior file under a different extension before writing the new one
+  // so the public URL points unambiguously at the latest upload.
+  await supabase.storage
+    .from(STORAGE_BUCKET)
+    .remove([
+      `gardens/${gardenId}.webp`,
+      `gardens/${gardenId}.jpg`,
+      `gardens/${gardenId}.png`,
+    ])
+    .catch(() => undefined)
+
+  const buf = Buffer.from(await file.arrayBuffer())
+  const { error: upErr } = await supabase.storage
+    .from(STORAGE_BUCKET)
+    .upload(filePath, buf, {
+      contentType: mime,
+      upsert: true,
+      cacheControl: '3600',
+    })
+  if (upErr) {
+    console.error('uploadGardenBackground storage upload failed:', upErr)
+    return { error: 'server' }
+  }
+
+  const {
+    data: { publicUrl },
+  } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(filePath)
+  // Cache-bust so a re-upload immediately shows on the canvas (the URL is
+  // otherwise stable per garden).
+  const url = `${publicUrl}?v=${Date.now()}`
+
+  const { error: dbErr } = await supabase
+    .from('gardens')
+    .update({ background_key: 'custom', background_url: url })
+    .eq('id', gardenId)
+  if (dbErr) {
+    console.error('uploadGardenBackground gardens update failed:', dbErr)
+    return { error: 'server' }
+  }
+  revalidatePath('/garten/plan')
+  return { ok: true, url }
+}
+
+export async function removeCustomGardenBackground(): Promise<SetBackgroundResult> {
+  const gardenId = await getCurrentGardenId()
+  if (!gardenId) return { error: 'no-garden' }
+  const supabase = adminClient()
+  await supabase.storage
+    .from(STORAGE_BUCKET)
+    .remove([
+      `gardens/${gardenId}.webp`,
+      `gardens/${gardenId}.jpg`,
+      `gardens/${gardenId}.png`,
+    ])
+    .catch(() => undefined)
+  const { error } = await supabase
+    .from('gardens')
+    .update({
+      background_key: null,
+      background_url: null,
+      background_opacity: null,
+    })
+    .eq('id', gardenId)
+  if (error) {
+    console.error('removeCustomGardenBackground failed:', error)
+    return { error: 'server' }
+  }
+  revalidatePath('/garten/plan')
+  return { ok: true }
+}
+
+export async function setCustomBackgroundOpacity(
+  opacity: number
+): Promise<SetBackgroundResult> {
+  const gardenId = await getCurrentGardenId()
+  if (!gardenId) return { error: 'no-garden' }
+  if (!Number.isFinite(opacity)) return { error: 'invalid' }
+  const clamped = Math.max(0, Math.min(1, opacity))
+  const supabase = adminClient()
+  const { error } = await supabase
+    .from('gardens')
+    .update({ background_opacity: clamped })
+    .eq('id', gardenId)
+  if (error) {
+    console.error('setCustomBackgroundOpacity failed:', error)
     return { error: 'server' }
   }
   revalidatePath('/garten/plan')

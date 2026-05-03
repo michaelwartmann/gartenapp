@@ -38,9 +38,16 @@ const BedCanvas = dynamic(() => import('./BedCanvas'), {
 type Props = {
   views: BedView[]
   backgroundKey: string | null
+  customBackgroundUrl?: string | null
+  customBackgroundOpacity?: number | null
 }
 
-export default function EditorClient({ views, backgroundKey }: Props) {
+export default function EditorClient({
+  views,
+  backgroundKey,
+  customBackgroundUrl = null,
+  customBackgroundOpacity = null,
+}: Props) {
   const router = useRouter()
   const beds = useMemo(() => views.map((v) => v.bed), [views])
   const initial = useMemo(() => assignDefaultPositions(beds), [beds])
@@ -312,6 +319,8 @@ export default function EditorClient({ views, backgroundKey }: Props) {
           locked={locked}
           bedPlantings={bedPlantings}
           backgroundKey={backgroundKey}
+          customBackgroundUrl={customBackgroundUrl}
+          customBackgroundOpacity={customBackgroundOpacity}
         />
 
         {!locked && dirty && (
@@ -353,6 +362,8 @@ export default function EditorClient({ views, backgroundKey }: Props) {
       {showBackgroundPicker && (
         <BackgroundPicker
           currentKey={backgroundKey}
+          customUrl={customBackgroundUrl}
+          customOpacity={customBackgroundOpacity}
           onClose={() => setShowBackgroundPicker(false)}
         />
       )}
