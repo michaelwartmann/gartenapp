@@ -1878,3 +1878,157 @@ export async function getGardenBilanz(year?: number): Promise<GardenBilanz | nul
     losses,
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────
+// Stage 13 — Beet-Tagebuch (photo timeline per bed)
+// ─────────────────────────────────────────────────────────────────────────
+
+const BED_PHOTOS_BUCKET = 'bed-photos'
+const BED_PHOTO_MAX_BYTES = 2_500_000 // ~2.5 MB after client-side compression
+const BED_PHOTO_ACCEPTED_MIME = new Set([
+  'image/webp',
+  'image/jpeg',
+  'image/png',
+])
+
+export type AddBedPhotoResult =
+  | { ok: true; photo: import('@/lib/supabase').BedPhoto }
+  | { error: 'no-garden' | 'not-found' | 'invalid' | 'too-large' | 'server' }
+
+export async function addBedPhoto(
+  formData: FormData
+): Promise<AddBedPhotoResult> {
+  const bedId = String(formData.get('bedId') ?? '')
+  if (!bedId) return { error: 'invalid' }
+  const file = formData.get('file')
+  if (!(file instanceof Blob)) return { error: 'invalid' }
+  if (file.size === 0) return { error: 'invalid' }
+  if (file.size > BED_PHOTO_MAX_BYTES) return { error: 'too-large' }
+  const mime = file.type || 'image/webp'
+  if (!BED_PHOTO_ACCEPTED_MIME.has(mime)) return { error: 'invalid' }
+
+  const takenAtRaw = String(formData.get('takenAt') ?? '').trim()
+  const takenAt =
+    takenAtRaw && isValidISODate(takenAtRaw) ? takenAtRaw : todayISO()
+
+  const own = await ensureOwnBed(bedId)
+  if ('error' in own) return { error: own.error }
+  const { supabase, gardenId } = own
+
+  // Generate the row id ahead of upload so the storage path is final.
+  const photoId =
+    typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID()
+      : // Fallback for older runtimes (Node ≥18 has crypto.randomUUID though).
+        `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+  const ext = mime === 'image/jpeg' ? 'jpg' : mime === 'image/png' ? 'png' : 'webp'
+  const filePath = `${bedId}/${photoId}.${ext}`
+
+  const buf = Buffer.from(await file.arrayBuffer())
+  const { error: upErr } = await supabase.storage
+    .from(BED_PHOTOS_BUCKET)
+    .upload(filePath, buf, {
+      contentType: mime,
+      upsert: false,
+      cacheControl: '3600',
+    })
+  if (upErr) {
+    console.error('addBedPhoto storage upload failed:', upErr)
+    return { error: 'server' }
+  }
+
+  const {
+    data: { publicUrl },
+  } = supabase.storage.from(BED_PHOTOS_BUCKET).getPublicUrl(filePath)
+
+  const { data: inserted, error: insErr } = await supabase
+    .from('bed_photos')
+    .insert({
+      id: photoId,
+      bed_id: bedId,
+      garden_id: gardenId,
+      photo_url: publicUrl,
+      taken_at: takenAt,
+    })
+    .select('*')
+    .single()
+  if (insErr || !inserted) {
+    console.error('addBedPhoto db insert failed:', insErr)
+    // Best-effort cleanup so we don't orphan storage objects.
+    await supabase.storage
+      .from(BED_PHOTOS_BUCKET)
+      .remove([filePath])
+      .catch(() => undefined)
+    return { error: 'server' }
+  }
+  revalidatePath('/garten/plan')
+  return { ok: true, photo: inserted as import('@/lib/supabase').BedPhoto }
+}
+
+export async function listBedPhotos(
+  bedId: string
+): Promise<import('@/lib/supabase').BedPhoto[]> {
+  const own = await ensureOwnBed(bedId)
+  if ('error' in own) return []
+  const { supabase } = own
+  const { data, error } = await supabase
+    .from('bed_photos')
+    .select('*')
+    .eq('bed_id', bedId)
+    .order('taken_at', { ascending: false })
+    .order('created_at', { ascending: false })
+  if (error) {
+    console.error('listBedPhotos failed:', error)
+    return []
+  }
+  return (data ?? []) as import('@/lib/supabase').BedPhoto[]
+}
+
+export type DeleteBedPhotoResult =
+  | { ok: true }
+  | { error: 'no-garden' | 'not-found' | 'server' }
+
+export async function deleteBedPhoto(
+  photoId: string
+): Promise<DeleteBedPhotoResult> {
+  const gardenId = await getCurrentGardenId()
+  if (!gardenId) return { error: 'no-garden' }
+  const supabase = adminClient()
+  const { data: row, error: selErr } = await supabase
+    .from('bed_photos')
+    .select('id, bed_id, garden_id, photo_url')
+    .eq('id', photoId)
+    .maybeSingle()
+  if (selErr || !row) return { error: 'not-found' }
+  const r = row as {
+    id: string
+    bed_id: string
+    garden_id: string
+    photo_url: string
+  }
+  if (r.garden_id !== gardenId) return { error: 'not-found' }
+
+  // Delete the storage object first; if it fails we still try the DB row
+  // (orphan storage is harmless, orphan rows would crash the gallery).
+  // Path is the URL portion after the bucket name.
+  const idx = r.photo_url.indexOf(`/${BED_PHOTOS_BUCKET}/`)
+  if (idx >= 0) {
+    const relPath = r.photo_url.slice(
+      idx + `/${BED_PHOTOS_BUCKET}/`.length
+    )
+    await supabase.storage
+      .from(BED_PHOTOS_BUCKET)
+      .remove([relPath])
+      .catch(() => undefined)
+  }
+  const { error: delErr } = await supabase
+    .from('bed_photos')
+    .delete()
+    .eq('id', photoId)
+  if (delErr) {
+    console.error('deleteBedPhoto failed:', delErr)
+    return { error: 'server' }
+  }
+  revalidatePath('/garten/plan')
+  return { ok: true }
+}

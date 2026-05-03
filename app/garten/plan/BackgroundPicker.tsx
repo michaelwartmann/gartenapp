@@ -13,6 +13,7 @@ import {
   removeCustomGardenBackground,
   setCustomBackgroundOpacity,
 } from './actions'
+import { compressImage } from '@/lib/imageCompression'
 
 type Props = {
   currentKey: string | null
@@ -21,52 +22,7 @@ type Props = {
   onClose: () => void
 }
 
-const COMPRESS_MAX_DIM = 768
-const COMPRESS_QUALITY = 0.78
-
-/**
- * Resize the picked file to ≤ COMPRESS_MAX_DIM on the longer side and
- * re-encode as WebP at COMPRESS_QUALITY. Falls back to the original Blob
- * unchanged if WebP isn't supported (very old iOS, etc.) — the server
- * accepts JPEG/PNG too.
- */
-async function compressImage(file: File): Promise<Blob> {
-  const dataUrl: string = await new Promise((resolve, reject) => {
-    const r = new FileReader()
-    r.onload = () => resolve(String(r.result ?? ''))
-    r.onerror = () => reject(r.error ?? new Error('FileReader failed'))
-    r.readAsDataURL(file)
-  })
-  const img: HTMLImageElement = await new Promise((resolve, reject) => {
-    const im = new Image()
-    im.onload = () => resolve(im)
-    im.onerror = () => reject(new Error('Image decode failed'))
-    im.src = dataUrl
-  })
-  const longest = Math.max(img.width, img.height)
-  const ratio = longest > COMPRESS_MAX_DIM ? COMPRESS_MAX_DIM / longest : 1
-  const w = Math.max(1, Math.round(img.width * ratio))
-  const h = Math.max(1, Math.round(img.height * ratio))
-  const canvas = document.createElement('canvas')
-  canvas.width = w
-  canvas.height = h
-  const ctx = canvas.getContext('2d')
-  if (!ctx) return file
-  ctx.drawImage(img, 0, 0, w, h)
-  const blob: Blob | null = await new Promise((resolve) => {
-    canvas.toBlob(
-      (b) => resolve(b),
-      'image/webp',
-      COMPRESS_QUALITY
-    )
-  })
-  if (blob && blob.size > 0) return blob
-  // Fallback: try JPEG, otherwise return original
-  const jpeg: Blob | null = await new Promise((resolve) => {
-    canvas.toBlob((b) => resolve(b), 'image/jpeg', 0.85)
-  })
-  return jpeg && jpeg.size > 0 ? jpeg : file
-}
+const BACKGROUND_MAX_DIM = 768
 
 export default function BackgroundPicker({
   currentKey,
@@ -125,7 +81,7 @@ export default function BackgroundPicker({
     setUploading(true)
     setBusyKey('custom')
     try {
-      const blob = await compressImage(file)
+      const blob = await compressImage(file, BACKGROUND_MAX_DIM)
       const fd = new FormData()
       fd.set('file', blob, 'background.webp')
       const res = await uploadGardenBackground(fd)

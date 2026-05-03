@@ -4,6 +4,37 @@ Alle nennenswerten Änderungen an der Gartenapp, in umgekehrter chronologischer 
 
 ---
 
+## Stage 13 — Beet-Tagebuch: Foto-Verlauf pro Beet (2026-05-03)
+
+Kims Idee: vom Beet ein Foto machen, mit Datum speichern, später vergleichen wie's wächst. Lerntagebuch-Visual-Pendant zur Stage-10-Bilanz.
+
+- **Neue `bed_photos`-Tabelle** (`id`, `bed_id`, `garden_id`, `photo_url`, `taken_at`, `notes`, `created_at`) + Index auf `(bed_id, taken_at DESC)`. Storage-Bucket `bed-photos` (Public, analog zu `garden-bg`). Pfad-Pattern: `bed-photos/{bed_id}/{photo_id}.{ext}`.
+- **Inline-Strip in `BedInlineView`** — direkt unter „Letztes Jahr". Horizontal scrollbarer Streifen mit 80×80-Thumbnails + Datum drunter, neueste links. Empty-State: „Mach ein Foto, um den Beet-Verlauf festzuhalten — gut für nächstes Jahr."
+- **`BedPhotoUploadSheet`** — Bottom-Sheet wie HarvestSheet/BackgroundPicker: File-Picker + Live-Preview + Datum-Input (Default heute). Client-side Compression auf 1024 px (höher als BG weil Detail wichtiger) WebP @ q78 via geteilten `lib/imageCompression.ts`-Helper (refactor aus Stage 5C — beidseitig genutzt).
+- **`BedPhotoViewer`** — Fullscreen-Modal: großes Bild (object-contain damit Hochformat + Querformat beide passen), Datum + Index-Counter (1/4) oben, Vor/Zurück-Pfeile + 🗑️-Knopf mit Confirm-Step unten. Tap auf Background schließt.
+- **3 neue Server-Actions:** `addBedPhoto(formData)` mit MIME + Size-Validation (max 2.5 MB nach Compress), Bed-Ownership-Check, Storage-Upload + DB-Insert mit explizit generierter UUID; `listBedPhotos(bedId)` mit Ownership-Check; `deleteBedPhoto(photoId)` löscht Storage-Object + DB-Row.
+- **`compressImage()`-Helper extrahiert** in `lib/imageCompression.ts` mit konfigurierbarem `maxDim`-Parameter; BackgroundPicker importiert ihn jetzt + verwendet `BACKGROUND_MAX_DIM=768`, BedPhotoUploadSheet `PHOTO_MAX_DIM=1024`.
+
+**v1 SCOPE bewusst klein:**
+- Keine Notizen pro Foto (Schema hat das Feld, UI nicht)
+- Keine Compare-View — User scrollt durch den Strip chronologisch
+- Sortiert immer nach `taken_at DESC` (Datum änderbar im Upload-Sheet)
+
+Files:
+- `notes/stage-13-schema.sql` (neu) — Schema + Storage-Bucket
+- `lib/imageCompression.ts` (neu) — extrahierter Helper
+- `lib/supabase.ts` — `BedPhoto`-Type
+- `app/garten/plan/actions.ts` — `addBedPhoto`, `listBedPhotos`, `deleteBedPhoto`
+- `app/garten/plan/BackgroundPicker.tsx` — refactored auf shared `compressImage`
+- `app/garten/plan/editor/BedPhotoStrip.tsx` (neu) — Strip-Component
+- `app/garten/plan/editor/BedPhotoUploadSheet.tsx` (neu) — Upload-Sheet
+- `app/garten/plan/editor/BedPhotoViewer.tsx` (neu) — Fullscreen-Viewer
+- `app/garten/plan/editor/BedInlineView.tsx` — `<BedPhotoStrip>` mount
+
+Schema-Migration (inkl. Storage-Bucket-Insert) im Supabase SQL-Editor *vor* dem ersten Foto-Upload.
+
+---
+
 ## Stage 12 — Catalog-Filter erweitert (2026-05-03)
 
 `/browse` hatte bisher Suche + Single-Cat-Pills + „+ Pflanze fehlt?". Stage 12 fügt fünf strukturierte Smart-Filter hinzu, die über die bereits geladenen Plant-Felder client-seitig aggregieren — kein Schema, kein Server-Roundtrip.
