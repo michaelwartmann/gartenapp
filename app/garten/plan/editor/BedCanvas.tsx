@@ -30,6 +30,10 @@ type Props = {
   bedPlantings?: Map<string, ThumbPlanting[]>
   /** Stored garden background key (NULL → no theme). */
   backgroundKey?: string | null
+  /** Stage 5C — when key='custom', the photo URL to render. */
+  customBackgroundUrl?: string | null
+  /** Stage 5C — user-controlled opacity for custom photo (0..1). */
+  customBackgroundOpacity?: number | null
 }
 
 const BED_FILL: Record<BedKind, string> = {
@@ -152,6 +156,8 @@ export default function BedCanvas({
   locked = false,
   bedPlantings,
   backgroundKey = null,
+  customBackgroundUrl = null,
+  customBackgroundOpacity = null,
 }: Props) {
   const transformerRef = useRef<Konva.Transformer | null>(null)
   const groupRefs = useRef<Map<string, Konva.Group>>(new Map())
@@ -230,7 +236,11 @@ export default function BedCanvas({
         }}
       >
         <Layer listening={false}>
-          <CanvasBackground backgroundKey={backgroundKey} />
+          <CanvasBackground
+            backgroundKey={backgroundKey}
+            customUrl={customBackgroundUrl}
+            customOpacity={customBackgroundOpacity}
+          />
         </Layer>
         <Layer>
           {beds.map((bed) => {

@@ -17,6 +17,8 @@ export type CanvasBackgroundKey =
   | 'aquarell'
   | 'stein'
   | 'botanik'
+  /** Stage 5C — User-uploaded photo, URL + opacity stored on the garden row. */
+  | 'custom'
 
 export type CanvasBackground = {
   key: CanvasBackgroundKey
@@ -86,12 +88,37 @@ const BG_BY_KEY = new Map<CanvasBackgroundKey, CanvasBackground>(
 
 const VALID_KEYS = new Set<string>(CANVAS_BACKGROUNDS.map((b) => b.key))
 
+/** Stage 5C — runtime-only fallback opacity for custom photos. */
+export const CUSTOM_BACKGROUND_DEFAULT_OPACITY = 0.55
+
 export function isValidBackgroundKey(s: string): s is CanvasBackgroundKey {
-  return VALID_KEYS.has(s)
+  return VALID_KEYS.has(s) || s === 'custom'
 }
 
 export function backgroundFor(key: string | null | undefined): CanvasBackground {
   if (!key) return BG_BY_KEY.get('default')!
   const bg = BG_BY_KEY.get(key as CanvasBackgroundKey)
   return bg ?? BG_BY_KEY.get('default')!
+}
+
+/**
+ * Stage 5C — assemble a CanvasBackground for a user-uploaded photo.
+ * The image lives in Supabase Storage; URL + opacity come from the
+ * `gardens` row. Used by CanvasBackground when key === 'custom'.
+ */
+export function customBackground(
+  url: string,
+  opacity: number | null | undefined
+): CanvasBackground {
+  const op =
+    typeof opacity === 'number' && opacity >= 0 && opacity <= 1
+      ? opacity
+      : CUSTOM_BACKGROUND_DEFAULT_OPACITY
+  return {
+    key: 'custom',
+    label: 'Eigenes Foto',
+    emoji: '📸',
+    path: url,
+    opacity: op,
+  }
 }

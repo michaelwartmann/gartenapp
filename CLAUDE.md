@@ -231,13 +231,13 @@ Stages shipped on top of v1.0 — siehe `CHANGELOG.md` für Details:
 - ✅ **Stage 8.2** (2026-05-03): Live-Test-Fixes — „+ Pflanze fehlt?"-CTA aus dem Footer in die Filter-Zeile (Findability), Smart-Categorization im AddPlantForm (`lib/classifyPlantCategories.ts` + Live-Hint via Debounced Gemini-Call + Soft-Confirm bei Konflikt + actions.ts Merge→Replace bei Zero-Overlap), Overlap-aware `assignDefaultPositions()` für neue Beete (kein top-left-Stapel mehr), Auto-Select neuer Bed mit Scroll-into-View nach AddBedForm-Submit.
 - ✅ **Stage 9** (2026-05-03): Ernte-Tracking als Verlaufs-Erfassung — neue `harvests`-Tabelle (event log), `plants.harvest_unit` (kg/bund/kopf/schnitt/stueck/schale/g, NULL für Blumen), via Gemini im Enrich + `npm run backfill-harvest-units` für Bestand. `HarvestSheet` mit Quick-Buttons (`+1 Bund`/`+0.5 kg`) für continuous-harvest, „🪦 Pflanze raus" als sekundäre Sheet-Aktion (loggt + setzt removed_at). Saison-Total inline im CurrentChip (`🌾 1.2 kg`). Plant-Detail bekommt Ernte-Verlauf-Sektion (per-Jahr aggregiert + Event-Liste).
 - ✅ **Stage 10** (2026-05-03): Garten-Bilanz mit Lerntagebuch-Framing — neue Seite `/garten/bilanz` (📊-Link im Home-Header). 5 Sektionen: Highlights, Pro Pflanze, Pro Beet, Pro Woche (SVG-Bars), Was nicht klappte. Stage 9 „Pflanze raus" bekommt Reason-Picker (`bed_plantings.removed_reason` mit 7-Wert-Constraint, `lib/removedReasons.ts`). Misserfolge sind first-class — eingegangene Pflanzen mit Lerneffekt-Hint („💡 nächstes Jahr Vlies"). Year-Switcher bei ≥2 Saisons.
+- ✅ **Stage 5C** (2026-05-03): Eigener Foto-Hintergrund pro Garten — `gardens.background_url` + `background_opacity` neu, Storage-Bucket `garden-bg` (Public). 📸-Tile im BackgroundPicker mit File-Picker → Client-Side Canvas-Compression auf 768 px WebP @ q78 → Server-Action-Upload via FormData. Opacity-Slider (0–100%, Commit auf release) + 🗑️ Entfernen wenn Custom aktiv. `customBackground()` Helper in `lib/canvasBackgrounds.ts`, key='custom' triggert Branch in CanvasBackground.
 
 Next up:
 
-1. **Stage 5C** — *eigenes* Foto-Hintergrund-Upload pro Garten (Storage-Subfolder `garden-bg/`, Konva-Image-Layer mit Opazitäts-Slider). Stage 8.1 hat schon kuratierte Themes geliefert; 5C ist die User-Upload-Variante.
-2. **Stage 5A.2** — expliziter „🌱→📦 Umpflanzen"-Knopf (Vorzucht → Hauptbeet, mit `removed_reason='umgepflanzt'`) für Februar 2027 wenn Vorzucht-Saison startet.
-3. **Stage 4C** (optional) — push notifications / email reminders driven off the daily-tasks pipeline.
-4. **Filter/sort** the catalog by any of the 16 botanical dimensions.
+1. **Stage 5A.2** — expliziter „🌱→📦 Umpflanzen"-Knopf (Vorzucht → Hauptbeet, mit `removed_reason='umgepflanzt'`) für Februar 2027 wenn Vorzucht-Saison startet.
+2. **Stage 4C** (optional) — push notifications / email reminders driven off the daily-tasks pipeline.
+3. **Filter/sort** the catalog by any of the 16 botanical dimensions.
 
 ## 🧪 Release-Readiness
 

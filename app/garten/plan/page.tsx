@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getCurrentGardenId } from '@/lib/currentGarden'
-import { listBedsForGarden, getGardenBackgroundKey } from './actions'
+import { listBedsForGarden, getGardenBackgroundConfig } from './actions'
 import EditorClient from './editor/EditorClient'
 import AddBedForm from './AddBedForm'
 
@@ -11,9 +11,9 @@ export default async function GartenPlanPage() {
   const gardenId = await getCurrentGardenId()
   if (!gardenId) redirect('/login')
 
-  const [views, backgroundKey] = await Promise.all([
+  const [views, bg] = await Promise.all([
     listBedsForGarden(),
-    getGardenBackgroundKey(),
+    getGardenBackgroundConfig(),
   ])
 
   if (views.length === 0) {
@@ -60,5 +60,12 @@ export default async function GartenPlanPage() {
   // EditorClient now mounts AddBedForm internally (so it can wire onAdded
   // → auto-select the new bed). The empty-state branch above keeps the
   // standalone AddBedForm because there's no editor to mount yet.
-  return <EditorClient views={views} backgroundKey={backgroundKey} />
+  return (
+    <EditorClient
+      views={views}
+      backgroundKey={bg.key}
+      customBackgroundUrl={bg.url}
+      customBackgroundOpacity={bg.opacity}
+    />
+  )
 }
