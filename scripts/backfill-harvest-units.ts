@@ -28,8 +28,11 @@ const MODEL = process.env.HARVEST_UNIT_MODEL || 'gemini-2.5-flash-lite'
 const API_BASE = 'https://generativelanguage.googleapis.com/v1beta'
 
 const VALID_UNITS = ['kg', 'g', 'stueck', 'bund', 'kopf', 'schnitt', 'schale'] as const
-// Empty string = "no harvest unit" (flowers etc.) — stored as NULL in DB.
-const VALID_RESPONSES = [...VALID_UNITS, ''] as const
+// "keine" sentinel = no harvest unit (flowers etc.) — converted to NULL on store.
+// Empty-string enum values are rejected by Gemini's response-schema validator,
+// so we use an explicit sentinel.
+const NONE_SENTINEL = 'keine'
+const VALID_RESPONSES = [...VALID_UNITS, NONE_SENTINEL] as const
 
 const SYSTEM_PROMPT = `Du bist Hobby-Gärtner und Botaniker. Du sagst, in welcher Mengen-Einheit die Ernte einer Pflanze typisch erfasst wird.
 
@@ -41,7 +44,7 @@ Wähle GENAU EINEN dieser Werte:
 - "kopf": Kohlarten (Kopfsalat, Brokkoli, Blumenkohl, Eisbergsalat, Rosenkohl)
 - "schnitt": Kräuter mit Schnittnutzung (Basilikum, Rosmarin, Thymian, Salbei, Oregano) — wenn "bund" auch passt, nimm "bund"
 - "schale": Beeren (Erdbeeren, Brombeeren, Himbeeren, Heidelbeeren, Johannisbeeren, Stachelbeeren)
-- "" (LEER): bei Pflanzen wo keine Mengen-Ernte sinnvoll ist — Zier-Blumen (Tulpe, Rose), reine Zier-Sträucher (Forsythie, Hortensie), Zier-Bäume.
+- "keine": bei Pflanzen wo keine Mengen-Ernte sinnvoll ist — Zier-Blumen (Tulpe, Rose), reine Zier-Sträucher (Forsythie, Hortensie), Zier-Bäume.
 
 Beispiele:
 - Tomate → "kg"
@@ -52,9 +55,9 @@ Beispiele:
 - Apfel → "kg"
 - Erdbeere → "schale"
 - Walnuss → "kg"
-- Tulpe → ""
-- Lavendel → ""
-- Rose → ""`
+- Tulpe → "keine"
+- Lavendel → "keine"
+- Rose → "keine"`
 
 async function classifyHarvestUnit(
   name: string,
@@ -107,7 +110,7 @@ async function classifyHarvestUnit(
   try {
     const parsed = JSON.parse(text) as { harvest_unit?: string }
     const v = (parsed.harvest_unit ?? '').trim()
-    if (v === '') return '' // valid "no unit"
+    if (v === NONE_SENTINEL || v === '') return '' // valid "no unit"
     if ((VALID_UNITS as readonly string[]).includes(v)) return v
     return null
   } catch {
@@ -171,7 +174,7 @@ async function main() {
         else ok++
       }
     } catch (e) {
-      console.log(`✗ ${e instanceof Error ? e.message.slice(0, 60) : 'error'}`)
+      console.log(`✗ ${e instanceof Error ? e.message.slice(0, 200) : 'error'}`)
       failed++
     }
     // Polite pause for free-tier rate limit
