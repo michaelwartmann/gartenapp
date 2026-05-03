@@ -12,6 +12,8 @@ import {
 import type { Bed, BedKind, BedShape, Plant } from '@/lib/supabase'
 import { VALID_BED_KINDS } from '@/lib/bedKinds'
 import { isValidBackgroundKey } from '@/lib/canvasBackgrounds'
+import { isValidHarvestUnit } from '@/lib/harvestUnits'
+import type { Harvest } from '@/lib/supabase'
 
 const VALID_BED_SHAPES: BedShape[] = ['rect', 'ellipse']
 
@@ -34,6 +36,16 @@ function currentYear(): number {
   return new Date().getFullYear()
 }
 
+export type PlantingHarvestSummary = {
+  count: number
+  /** Sum of amounts when all events share a unit; null if mixed. */
+  totalAmount: number | null
+  totalUnit: string | null
+  lastDate: string | null
+  lastAmount: number | null
+  lastUnit: string | null
+}
+
 export type PlantingWithPlant = {
   id: string
   bed_id: string
@@ -46,6 +58,10 @@ export type PlantingWithPlant = {
   plant_illustration_url: string | null
   plant_family: string | null
   plant_stark_oder_schwachzehrer: string | null
+  /** Stage 9 — default harvest unit suggested for this plant (NULL = no harvest UI). */
+  plant_harvest_unit: string | null
+  /** Stage 9 — aggregated harvest log for this planting. NULL if no harvests yet. */
+  harvest_summary: PlantingHarvestSummary | null
 }
 
 export type BedView = {
@@ -77,7 +93,7 @@ export async function listBedsForGarden(): Promise<BedView[]> {
   const { data: plantings, error: pError } = await supabase
     .from('bed_plantings')
     .select(
-      'id, bed_id, plant_id, season_year, planted_at, removed_at, plants(name, category, illustration_url, family, stark_oder_schwachzehrer)'
+      'id, bed_id, plant_id, season_year, planted_at, removed_at, plants(name, category, illustration_url, family, stark_oder_schwachzehrer, harvest_unit)'
     )
     .in('bed_id', bedIds)
     .gte('season_year', lastYear)
@@ -100,17 +116,67 @@ export async function listBedsForGarden(): Promise<BedView[]> {
       illustration_url: string | null
       family: string | null
       stark_oder_schwachzehrer: string | null
+      harvest_unit: string | null
     } | Array<{
       name: string
       category: string
       illustration_url: string | null
       family: string | null
       stark_oder_schwachzehrer: string | null
+      harvest_unit: string | null
     }> | null
   }
 
+  // Stage 9 — fetch harvest events for every planting in one query and
+  // aggregate per-planting summaries (count, total if uniform unit, last
+  // event). Cheap: one extra round-trip, no per-row N+1.
+  const plantingRows = (plantings ?? []) as PRow[]
+  const plantingIds = plantingRows.map((r) => r.id)
+  const harvestsByPlanting = new Map<string, PlantingHarvestSummary>()
+  if (plantingIds.length > 0) {
+    const { data: harvests, error: hError } = await supabase
+      .from('harvests')
+      .select('bed_planting_id, amount, unit, harvested_at, created_at')
+      .in('bed_planting_id', plantingIds)
+      .order('harvested_at', { ascending: false })
+      .order('created_at', { ascending: false })
+    if (hError) {
+      // Schema not migrated yet, or other error — silently fall through with
+      // empty summaries so the page still renders. UI will show no totals.
+      console.error('listBedsForGarden harvests query failed:', hError)
+    } else {
+      type HRow = {
+        bed_planting_id: string
+        amount: number | string
+        unit: string
+        harvested_at: string
+      }
+      const grouped = new Map<string, HRow[]>()
+      for (const h of (harvests ?? []) as HRow[]) {
+        const arr = grouped.get(h.bed_planting_id) ?? []
+        arr.push(h)
+        grouped.set(h.bed_planting_id, arr)
+      }
+      for (const [pid, events] of grouped) {
+        const units = new Set(events.map((e) => e.unit))
+        const last = events[0]
+        harvestsByPlanting.set(pid, {
+          count: events.length,
+          totalAmount:
+            units.size === 1
+              ? events.reduce((s, e) => s + Number(e.amount), 0)
+              : null,
+          totalUnit: units.size === 1 ? last.unit : null,
+          lastDate: last.harvested_at,
+          lastAmount: Number(last.amount),
+          lastUnit: last.unit,
+        })
+      }
+    }
+  }
+
   const flat: PlantingWithPlant[] = []
-  for (const row of (plantings ?? []) as PRow[]) {
+  for (const row of plantingRows) {
     const p = Array.isArray(row.plants) ? row.plants[0] : row.plants
     if (!p) continue
     flat.push({
@@ -125,6 +191,8 @@ export async function listBedsForGarden(): Promise<BedView[]> {
       plant_illustration_url: p.illustration_url,
       plant_family: p.family,
       plant_stark_oder_schwachzehrer: p.stark_oder_schwachzehrer,
+      plant_harvest_unit: p.harvest_unit ?? null,
+      harvest_summary: harvestsByPlanting.get(row.id) ?? null,
     })
   }
 
@@ -926,3 +994,305 @@ export async function setGardenBackground(
   return { ok: true }
 }
 
+
+// ─────────────────────────────────────────────────────────────────────────
+// Stage 9 — Ernte-Tracking (event log + per-planting summary)
+// ─────────────────────────────────────────────────────────────────────────
+
+export type RecordHarvestInput = {
+  plantingId: string
+  amount: number
+  unit: string
+  /** ISO YYYY-MM-DD; defaults to today on the server if omitted/invalid. */
+  date?: string | null
+  notes?: string | null
+  /** When true, also set bed_plantings.removed_at = harvest date ("Pflanze raus"). */
+  endPlanting?: boolean
+}
+
+export type RecordHarvestResult =
+  | { ok: true; harvest: Harvest }
+  | { error: 'no-garden' | 'not-found' | 'invalid' | 'server' }
+
+function isValidISODate(s: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(s))
+}
+
+export async function recordHarvest(
+  input: RecordHarvestInput
+): Promise<RecordHarvestResult> {
+  if (!input || typeof input.plantingId !== 'string') return { error: 'invalid' }
+  if (!Number.isFinite(input.amount) || input.amount < 0) return { error: 'invalid' }
+  if (typeof input.unit !== 'string' || !isValidHarvestUnit(input.unit)) {
+    return { error: 'invalid' }
+  }
+  const harvestedAt =
+    input.date && isValidISODate(input.date) ? input.date : todayISO()
+  const cleanNotes =
+    typeof input.notes === 'string' && input.notes.trim()
+      ? input.notes.trim().slice(0, 500)
+      : null
+
+  const own = await ensureOwnPlanting(input.plantingId)
+  if ('error' in own) return { error: own.error }
+  const { supabase, gardenId, plantId } = own
+
+  const { data: inserted, error: insErr } = await supabase
+    .from('harvests')
+    .insert({
+      bed_planting_id: input.plantingId,
+      garden_id: gardenId,
+      amount: input.amount,
+      unit: input.unit,
+      harvested_at: harvestedAt,
+      notes: cleanNotes,
+    })
+    .select('*')
+    .single()
+  if (insErr || !inserted) {
+    console.error('recordHarvest insert failed:', insErr)
+    return { error: 'server' }
+  }
+
+  if (input.endPlanting) {
+    const { error: upErr } = await supabase
+      .from('bed_plantings')
+      .update({ removed_at: harvestedAt })
+      .eq('id', input.plantingId)
+    if (upErr) {
+      console.error('recordHarvest end-planting update failed:', upErr)
+      // The harvest event was inserted successfully — return ok so the user
+      // doesn't lose their entry. Their next "Pflanze raus" tap will retry.
+    }
+  }
+
+  revalidatePath('/garten/plan')
+  revalidatePath('/')
+  revalidatePath(`/plants/${plantId}`)
+  return { ok: true, harvest: inserted as Harvest }
+}
+
+export type DeleteHarvestResult =
+  | { ok: true }
+  | { error: 'no-garden' | 'not-found' | 'server' }
+
+export async function deleteHarvest(
+  harvestId: string
+): Promise<DeleteHarvestResult> {
+  const gardenId = await getCurrentGardenId()
+  if (!gardenId) return { error: 'no-garden' }
+  const supabase = adminClient()
+  const { data: row, error: selErr } = await supabase
+    .from('harvests')
+    .select('id, bed_planting_id, garden_id')
+    .eq('id', harvestId)
+    .maybeSingle()
+  if (selErr || !row) return { error: 'not-found' }
+  if ((row as { garden_id: string }).garden_id !== gardenId) {
+    return { error: 'not-found' }
+  }
+  const { error: delErr } = await supabase
+    .from('harvests')
+    .delete()
+    .eq('id', harvestId)
+  if (delErr) {
+    console.error('deleteHarvest failed:', delErr)
+    return { error: 'server' }
+  }
+  // Look up the plantId for revalidate so the plant detail page refreshes.
+  const planting = await supabase
+    .from('bed_plantings')
+    .select('plant_id')
+    .eq('id', (row as { bed_planting_id: string }).bed_planting_id)
+    .maybeSingle()
+  const plantId = (planting.data as { plant_id?: string } | null)?.plant_id
+  revalidatePath('/garten/plan')
+  if (plantId) revalidatePath(`/plants/${plantId}`)
+  return { ok: true }
+}
+
+export type HarvestSummary = {
+  /** Total of harvests for this planting in the current season, only if
+   *  all events use the same unit. NULL if unit is mixed (display falls
+   *  back to "X Einträge"). */
+  totalAmount: number | null
+  totalUnit: string | null
+  count: number
+  /** ISO YYYY-MM-DD of the most recent harvest event, NULL if none. */
+  lastDate: string | null
+  /** Last event's amount + unit, for the "↩ Letzte: 1 Bund" hint. */
+  lastAmount: number | null
+  lastUnit: string | null
+}
+
+export async function getHarvestSummaryForPlanting(
+  plantingId: string
+): Promise<HarvestSummary | null> {
+  const own = await ensureOwnPlanting(plantingId)
+  if ('error' in own) return null
+  const { supabase } = own
+
+  const { data, error } = await supabase
+    .from('harvests')
+    .select('amount, unit, harvested_at')
+    .eq('bed_planting_id', plantingId)
+    .order('harvested_at', { ascending: false })
+    .order('created_at', { ascending: false })
+  if (error) {
+    console.error('getHarvestSummaryForPlanting failed:', error)
+    return null
+  }
+  const rows = (data ?? []) as Array<{
+    amount: number | string
+    unit: string
+    harvested_at: string
+  }>
+  if (rows.length === 0) {
+    return {
+      totalAmount: null,
+      totalUnit: null,
+      count: 0,
+      lastDate: null,
+      lastAmount: null,
+      lastUnit: null,
+    }
+  }
+  const units = new Set(rows.map((r) => r.unit))
+  let total: number | null = null
+  let totalUnit: string | null = null
+  if (units.size === 1) {
+    totalUnit = rows[0].unit
+    total = rows.reduce((s, r) => s + Number(r.amount), 0)
+  }
+  const last = rows[0]
+  return {
+    totalAmount: total,
+    totalUnit,
+    count: rows.length,
+    lastDate: last.harvested_at,
+    lastAmount: Number(last.amount),
+    lastUnit: last.unit,
+  }
+}
+
+export async function listHarvestsForPlanting(
+  plantingId: string
+): Promise<Harvest[]> {
+  const own = await ensureOwnPlanting(plantingId)
+  if ('error' in own) return []
+  const { supabase } = own
+  const { data, error } = await supabase
+    .from('harvests')
+    .select('*')
+    .eq('bed_planting_id', plantingId)
+    .order('harvested_at', { ascending: false })
+    .order('created_at', { ascending: false })
+  if (error) {
+    console.error('listHarvestsForPlanting failed:', error)
+    return []
+  }
+  return (data ?? []) as Harvest[]
+}
+
+/**
+ * Aggregated harvest history for a plant across ALL plantings it has had
+ * in the user's garden — for the Plant-Detail "Ernte-Verlauf" section.
+ * Returns events newest-first, plus a season total for the current year.
+ */
+export type PlantHarvestHistory = {
+  events: Array<
+    Harvest & { bedLabel: string; seasonYear: number }
+  >
+  /** Per-year totals, only filled when all events that year share a unit. */
+  byYear: Array<{
+    year: number
+    count: number
+    totalAmount: number | null
+    totalUnit: string | null
+  }>
+}
+
+export async function getPlantHarvestHistory(
+  plantId: string
+): Promise<PlantHarvestHistory> {
+  const gardenId = await getCurrentGardenId()
+  if (!gardenId) return { events: [], byYear: [] }
+  const supabase = adminClient()
+
+  // Two-step: get plantings of this plant in this garden, then their harvests.
+  const { data: plantings, error: pErr } = await supabase
+    .from('bed_plantings')
+    .select(
+      'id, season_year, beds!inner(garden_id, label)'
+    )
+    .eq('plant_id', plantId)
+  if (pErr) {
+    console.error('getPlantHarvestHistory plantings failed:', pErr)
+    return { events: [], byYear: [] }
+  }
+  type PRow = {
+    id: string
+    season_year: number
+    beds:
+      | { garden_id: string; label: string }
+      | Array<{ garden_id: string; label: string }>
+      | null
+  }
+  const ownedPlantings = new Map<
+    string,
+    { bedLabel: string; seasonYear: number }
+  >()
+  for (const row of (plantings ?? []) as PRow[]) {
+    const b = Array.isArray(row.beds) ? row.beds[0] : row.beds
+    if (!b || b.garden_id !== gardenId) continue
+    ownedPlantings.set(row.id, {
+      bedLabel: b.label,
+      seasonYear: row.season_year,
+    })
+  }
+  if (ownedPlantings.size === 0) return { events: [], byYear: [] }
+
+  const { data: harvests, error: hErr } = await supabase
+    .from('harvests')
+    .select('*')
+    .in('bed_planting_id', Array.from(ownedPlantings.keys()))
+    .order('harvested_at', { ascending: false })
+    .order('created_at', { ascending: false })
+  if (hErr) {
+    console.error('getPlantHarvestHistory harvests failed:', hErr)
+    return { events: [], byYear: [] }
+  }
+  const events = ((harvests ?? []) as Harvest[]).map((h) => {
+    const meta = ownedPlantings.get(h.bed_planting_id)!
+    return { ...h, bedLabel: meta.bedLabel, seasonYear: meta.seasonYear }
+  })
+
+  // Per-year aggregates
+  const byYearMap = new Map<
+    number,
+    { count: number; units: Set<string>; sum: number }
+  >()
+  for (const e of events) {
+    const y = new Date(e.harvested_at).getFullYear()
+    if (!byYearMap.has(y)) {
+      byYearMap.set(y, { count: 0, units: new Set(), sum: 0 })
+    }
+    const a = byYearMap.get(y)!
+    a.count++
+    a.units.add(e.unit)
+    a.sum += Number(e.amount)
+  }
+  const byYear = Array.from(byYearMap.entries())
+    .map(([year, a]) => ({
+      year,
+      count: a.count,
+      totalAmount: a.units.size === 1 ? a.sum : null,
+      totalUnit: a.units.size === 1 ? Array.from(a.units)[0] : null,
+    }))
+    .sort((a, b) => b.year - a.year)
+
+  return { events, byYear }
+}
+
+// HarvestUnit is re-exported from `lib/harvestUnits` directly — re-exporting
+// types from a 'use server' module is rejected by the RSC compiler.

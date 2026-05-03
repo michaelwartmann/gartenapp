@@ -18,10 +18,13 @@ import {
   markBedPlantingAsPlanted,
   markBedPlantingAsNotPlanted,
   updateBedPlantingDate,
+  getPlantHarvestHistory,
   type BedForPlant,
+  type PlantHarvestHistory,
 } from '@/app/garten/plan/actions'
 import AssignBedSheet from '@/app/garten/plan/AssignBedSheet'
 import { bedKindIcon, bedKindLabel } from '@/lib/bedKinds'
+import { formatHarvest } from '@/lib/harvestUnits'
 
 function formatISODate(iso: string | null): string {
   if (!iso) return ''
@@ -97,6 +100,10 @@ export default function PlantDetailPage({ params }: { params: Promise<{ id: stri
   const [bedDateDraft, setBedDateDraft] = useState('')
   const [busyBedId, setBusyBedId] = useState<string | null>(null)
   const [bedPending, startBedTransition] = useTransition()
+  const [harvestHistory, setHarvestHistory] = useState<PlantHarvestHistory>({
+    events: [],
+    byYear: [],
+  })
   const router = useRouter()
   const searchParams = useSearchParams()
   const fresh = searchParams.get('fresh') === '1'
@@ -120,6 +127,7 @@ export default function PlantDetailPage({ params }: { params: Promise<{ id: stri
         listBedsForGarden()
           .then((views) => setBedCount(views.length))
           .catch(() => {})
+        getPlantHarvestHistory(id).then(setHarvestHistory).catch(() => {})
       } catch (err) {
         console.error('Error loading plant data:', err)
         setError(err instanceof Error ? err.message : 'Failed to load plant data')
@@ -608,6 +616,68 @@ export default function PlantDetailPage({ params }: { params: Promise<{ id: stri
                   </div>
                 )
               })}
+            </div>
+          </div>
+        )}
+
+        {/* Stage 9 — Ernte-Verlauf: per-year totals + event log. */}
+        {harvestHistory.events.length > 0 && (
+          <div className="mb-6">
+            <h2
+              className="text-xs font-medium uppercase tracking-wide mb-2"
+              style={{ color: '#888780' }}
+            >
+              🌾 Ernte-Verlauf
+            </h2>
+            <div className="space-y-2">
+              {harvestHistory.byYear.map((y) => (
+                <div
+                  key={y.year}
+                  className="rounded-lg border bg-white px-3 py-2 flex items-center justify-between"
+                  style={{ borderColor: '#E8E6DF' }}
+                >
+                  <span className="text-sm font-medium" style={{ color: '#2C2C2A' }}>
+                    {y.year}
+                  </span>
+                  <span className="text-xs" style={{ color: '#4A7C59' }}>
+                    {y.totalUnit && y.totalAmount !== null ? (
+                      <>
+                        Σ {formatHarvest(y.totalAmount, y.totalUnit)}
+                        {' · '}
+                        {y.count} {y.count === 1 ? 'Eintrag' : 'Einträge'}
+                      </>
+                    ) : (
+                      <>
+                        {y.count} {y.count === 1 ? 'Eintrag' : 'Einträge'} (gemischte
+                        Einheiten)
+                      </>
+                    )}
+                  </span>
+                </div>
+              ))}
+              <details className="rounded-lg border bg-white" style={{ borderColor: '#E8E6DF' }}>
+                <summary
+                  className="px-3 py-2 text-xs cursor-pointer touch-manipulation"
+                  style={{ color: '#888780' }}
+                >
+                  Alle Einträge ({harvestHistory.events.length})
+                </summary>
+                <div className="px-3 pb-3 space-y-1.5">
+                  {harvestHistory.events.map((e) => (
+                    <div
+                      key={e.id}
+                      className="flex items-center justify-between text-xs gap-2"
+                    >
+                      <span style={{ color: '#888780' }}>
+                        {formatISODate(e.harvested_at)} · {e.bedLabel}
+                      </span>
+                      <span style={{ color: '#2C2C2A', fontWeight: 500 }}>
+                        {formatHarvest(e.amount, e.unit)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </details>
             </div>
           </div>
         )}

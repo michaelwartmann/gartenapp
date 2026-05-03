@@ -12,7 +12,8 @@
     "backfill-bed-kinds": "tsx scripts/backfill-bed-kinds.ts",
     "backfill-categories": "tsx scripts/backfill-categories.ts",
     "set-locations": "tsx scripts/set-locations.ts",
-    "generate-backgrounds": "tsx scripts/generate-backgrounds.ts"
+    "generate-backgrounds": "tsx scripts/generate-backgrounds.ts",
+    "backfill-harvest-units": "tsx scripts/backfill-harvest-units.ts"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",

@@ -39,6 +39,11 @@ export type EnrichedPlant = Record<FieldKey, string> & {
    * `createPlantAndAdd`).
    */
   categories: string[]
+  /**
+   * Stage 9 — default harvest unit ('kg', 'bund', 'kopf', etc.).
+   * Empty string when no meaningful harvest unit (e.g. flowers).
+   */
+  harvest_unit: string
 }
 
 const FIELD_DESCRIPTIONS: Record<FieldKey, string> = {
@@ -94,6 +99,18 @@ Eine Pflanze kann zu mehreren Kategorien gehören:
 
 Beginne mit der treffendsten Primär-Kategorie. Mehrere möglich nur wenn beide gleichermaßen zutreffen.`
 
+const HARVEST_UNIT_DESCRIPTION = `Welche Mengen-Einheit ist beim Ernten dieser Pflanze sinnvoll? Wähle GENAU EINEN dieser Werte:
+- "kg": Frucht-Gemüse (Tomate, Paprika, Gurke, Kürbis), Wurzelgemüse (Karotte, Kartoffel), Obstbäume (Apfel, Birne), Beeren in größeren Mengen
+- "g": kleine Beerenmengen, Pilze, sehr leichtes Erntegut
+- "stueck": einzelne zählbare Früchte (Aubergine, Zitrone), Blumenzwiebeln
+- "bund": Pflücksalat, Kräuter (Petersilie, Schnittlauch), Babyleaf, Lauch, Radieschen — alles was am Stiel gebündelt wird
+- "kopf": Kohlarten (Kopfsalat, Brokkoli, Blumenkohl, Eisbergsalat, Rosenkohl) — alles wo ein Kopf das Erntegut ist
+- "schnitt": Kräuter mit kontinuierlicher Schnittnutzung (Basilikum, Rosmarin, Thymian, Salbei) — wenn "bund" auch passt, nimm "bund"
+- "schale": Beeren (Erdbeeren, Brombeeren, Himbeeren, Heidelbeeren, Johannisbeeren)
+- "" (LEER): bei Pflanzen wo keine Mengen-Ernte sinnvoll ist (Zierblumen, Bäume rein dekorativ, Bodendecker). LEER zurückgeben.
+
+Beispiele: Tomate→"kg", Apfel→"kg", Pflücksalat→"bund", Schnittlauch→"bund", Basilikum→"bund", Brokkoli→"kopf", Erdbeere→"schale", Walnuss→"kg", Tulpe→"" (leer), Lavendel→"" (Zierpflanze, geerntet höchstens als Schnitt).`
+
 const SUITABLE_BED_KINDS_DESCRIPTION = `Welche der folgenden Beet-Arten passen zu dieser Pflanze? Gib 1–4 Werte aus dieser Liste zurück: ${VALID_BED_KINDS.join(', ')}.
 
 Bedeutung der Werte:
@@ -126,10 +143,14 @@ function buildResponseSchema() {
     description: CATEGORIES_DESCRIPTION,
     items: { type: 'STRING', enum: [...PLANT_CATEGORIES] },
   }
+  properties.harvest_unit = {
+    type: 'STRING',
+    description: HARVEST_UNIT_DESCRIPTION,
+  }
   return {
     type: 'OBJECT',
     properties,
-    required: [...FIELD_KEYS, 'suitable_bed_kinds', 'categories'],
+    required: [...FIELD_KEYS, 'suitable_bed_kinds', 'categories', 'harvest_unit'],
   }
 }
 
@@ -250,6 +271,11 @@ export async function enrichPlantWithGemini(
     if (cleanCats.length >= 3) break
   }
   result.categories = cleanCats
+
+  // Stage 9 — normalize harvest_unit: must be one of the 7 valid values, or empty.
+  const rawHU = typeof parsed.harvest_unit === 'string' ? parsed.harvest_unit.trim() : ''
+  const VALID_HARVEST_UNITS = ['kg', 'g', 'stueck', 'bund', 'kopf', 'schnitt', 'schale']
+  result.harvest_unit = VALID_HARVEST_UNITS.includes(rawHU) ? rawHU : ''
   return result
 }
 

@@ -7,7 +7,6 @@ import {
   removePlantingFromBed,
   markBedPlantingAsPlanted,
   markBedPlantingAsNotPlanted,
-  markBedPlantingAsHarvested,
   unmarkBedPlantingAsHarvested,
 } from '../actions'
 import AddPlantSheet from '../AddPlantSheet'
@@ -45,14 +44,6 @@ export default function BedInlineView({ view, onDeleted }: Props) {
       } else {
         await markBedPlantingAsPlanted(p.id)
       }
-      setBusyId(null)
-    })
-  }
-
-  function doHarvest(id: string) {
-    setBusyId(id)
-    startTransition(async () => {
-      await markBedPlantingAsHarvested(id)
       setBusyId(null)
     })
   }
@@ -161,7 +152,6 @@ export default function BedInlineView({ view, onDeleted }: Props) {
                 p={p}
                 onToggle={() => doToggleState(p)}
                 onRemove={() => doRemovePlanting(p.id)}
-                onHarvest={() => doHarvest(p.id)}
                 onUnharvest={() => doUnharvest(p.id)}
                 busy={busyId === p.id}
               />
