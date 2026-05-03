@@ -6,6 +6,7 @@ import { after } from 'next/server'
 import { getCurrentGardenId } from '@/lib/currentGarden'
 import { enrichPlantWithGemini, FIELD_KEYS } from '@/lib/enrichPlant'
 import { generateAndUploadKawaiiImage } from '@/lib/generateKawaiiImage'
+import { classifyPlantCategories } from '@/lib/classifyPlantCategories'
 
 function adminClient() {
   return createClient(
@@ -167,17 +168,36 @@ export async function createPlantAndAdd(
         if (enriched.suitable_bed_kinds.length > 0) {
           update.suitable_bed_kinds = enriched.suitable_bed_kinds
         }
-        // Merge Gemini's category suggestions with the user's pick.
-        // Primary stays at index 0 (user's first pick); we append any
-        // Gemini-suggested cats not already present, capped at 3 total.
+        // Stage 8.2: smart merge of Gemini's category suggestions with the
+        // user's pick.
+        //   - If there is ANY overlap → user's pick is meaningful, augment
+        //     with Gemini's additional suggestions (cap 3, primary preserved).
+        //   - If there is NO overlap → user picked something Gemini disagrees
+        //     with completely (Kim's "Zitrone = Gemüse" case). Replace with
+        //     Gemini's set so we don't end up with ['Gemüse', 'Obst', 'Baum'].
+        // Either way, also update `category` (primary) so the colored display
+        // pill matches the new primary.
         if (enriched.categories.length > 0) {
-          const merged: string[] = [...categories]
-          for (const c of enriched.categories) {
-            if (merged.length >= 3) break
-            if (!merged.includes(c)) merged.push(c)
+          const userSet = new Set(categories)
+          const overlap = enriched.categories.some((c) => userSet.has(c))
+          let final: string[]
+          if (overlap) {
+            final = [...categories]
+            for (const c of enriched.categories) {
+              if (final.length >= 3) break
+              if (!final.includes(c)) final.push(c)
+            }
+          } else {
+            final = enriched.categories.slice(0, 3)
           }
-          if (merged.length > categories.length) {
-            update.categories = merged
+          const changed =
+            final.length !== categories.length ||
+            final.some((c, i) => c !== categories[i])
+          if (changed) {
+            update.categories = final
+            if (final[0] && final[0] !== category) {
+              update.category = final[0]
+            }
           }
         }
         if (Object.keys(update).length > 0) {
@@ -226,4 +246,20 @@ export async function createPlantAndAdd(
     suitableBedKinds,
     deduped: !isNew,
   }
+}
+
+/**
+ * Stage 8.2 — live category suggestion for the AddPlantForm.
+ * Called debounced from the client as the user types name + latin name.
+ * Returns null on any failure so the UI silently falls back to manual mode.
+ */
+export async function suggestCategoriesForPlant(
+  name: string,
+  latinName: string
+): Promise<{ categories: string[] } | null> {
+  const cleanName = (name ?? '').trim()
+  const cleanLatin = (latinName ?? '').trim()
+  if (!cleanName || cleanName.length < 2 || cleanName.length > 80) return null
+  if (cleanLatin.length > 80) return null
+  return classifyPlantCategories(cleanName, cleanLatin)
 }

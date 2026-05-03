@@ -4,7 +4,13 @@ import { useState, useTransition } from 'react'
 import { createBed } from './actions'
 import { BED_KINDS } from '@/lib/bedKinds'
 
-export default function AddBedForm() {
+type Props = {
+  /** Stage 8.2 — called with the new bed's id after createBed succeeds.
+   *  EditorClient uses this to auto-select the new bed so the user sees it. */
+  onAdded?: (bedId: string) => void
+}
+
+export default function AddBedForm({ onAdded }: Props = {}) {
   const [open, setOpen] = useState(false)
   const [label, setLabel] = useState('')
   const [kind, setKind] = useState<string>('beet')
@@ -31,6 +37,7 @@ export default function AddBedForm() {
       }
       reset()
       setOpen(false)
+      if (onAdded) onAdded(res.bed.id)
     })
   }
 
