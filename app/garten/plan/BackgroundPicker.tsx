@@ -228,23 +228,28 @@ export default function BackgroundPicker({
                 style={{
                   borderColor: active ? '#4A7C59' : '#E8E6DF',
                   borderWidth: active ? 2 : 1,
-                  backgroundColor: '#FFFFFF',
+                  backgroundColor: '#FAFAF7',
                   aspectRatio: '2 / 3',
                   minHeight: 140,
                 }}
                 aria-pressed={active}
               >
-                {bg.path ? (
+                {bg.path && (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={bg.path}
                     alt=""
-                    className="absolute inset-0 w-full h-full object-cover"
+                    className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+                    style={{ opacity: bg.opacity }}
                   />
-                ) : (
+                )}
+                {/* Stage 11C — shadow beds: how a typical Skizze sits on top
+                    of the theme + opacity. Same look as the actual canvas. */}
+                <ShadowBeds />
+                {!bg.path && (
                   <div
-                    className="absolute inset-0 flex items-center justify-center text-3xl"
-                    style={{ backgroundColor: '#FAFAF7', color: '#C8C5BA' }}
+                    className="absolute top-2 right-2 text-base opacity-50"
+                    style={{ color: '#888780' }}
                   >
                     {bg.emoji}
                   </div>
@@ -276,7 +281,7 @@ export default function BackgroundPicker({
             style={{
               borderColor: customActive ? '#4A7C59' : '#E8E6DF',
               borderWidth: customActive ? 2 : 1,
-              backgroundColor: '#FFFFFF',
+              backgroundColor: '#FAFAF7',
               aspectRatio: '2 / 3',
               minHeight: 140,
             }}
@@ -284,12 +289,19 @@ export default function BackgroundPicker({
             aria-label={hasCustomOnFile ? 'Foto ersetzen' : 'Eigenes Foto hochladen'}
           >
             {hasCustomOnFile ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={customUrl ?? ''}
-                alt=""
-                className="absolute inset-0 w-full h-full object-cover"
-              />
+              <>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={customUrl ?? ''}
+                  alt=""
+                  className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+                  style={{
+                    opacity:
+                      customOpacity ?? CUSTOM_BACKGROUND_DEFAULT_OPACITY,
+                  }}
+                />
+                <ShadowBeds />
+              </>
             ) : (
               <div
                 className="absolute inset-0 flex flex-col items-center justify-center gap-2"
@@ -377,5 +389,41 @@ export default function BackgroundPicker({
         </p>
       </div>
     </div>
+  )
+}
+
+/**
+ * Stage 11C — Two abstract bed-shaped rectangles overlaid on each picker
+ * tile, so the preview matches what the user actually sees on the canvas:
+ * theme + opacity + beds on top.
+ */
+function ShadowBeds() {
+  return (
+    <>
+      <div
+        className="absolute pointer-events-none rounded"
+        style={{
+          top: '14%',
+          left: '14%',
+          width: '34%',
+          height: '28%',
+          backgroundColor: '#E8DCC8',
+          border: '1px solid #4A7C59',
+          opacity: 0.85,
+        }}
+      />
+      <div
+        className="absolute pointer-events-none rounded-full"
+        style={{
+          top: '50%',
+          left: '52%',
+          width: '32%',
+          height: '20%',
+          backgroundColor: '#D8C8B8',
+          border: '1px solid #4A7C59',
+          opacity: 0.85,
+        }}
+      />
+    </>
   )
 }

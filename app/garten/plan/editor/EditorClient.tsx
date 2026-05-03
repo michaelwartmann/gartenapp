@@ -16,7 +16,7 @@ import {
 import BedInlineView from './BedInlineView'
 import type { ThumbPlanting } from './PlantThumbnails'
 import BackgroundPicker from '../BackgroundPicker'
-import AddBedForm from '../AddBedForm'
+import AddBedSheet from '../AddBedSheet'
 
 const BedCanvas = dynamic(() => import('./BedCanvas'), {
   ssr: false,
@@ -59,6 +59,7 @@ export default function EditorClient({
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [locked, setLocked] = useState<boolean>(true)
   const [showBackgroundPicker, setShowBackgroundPicker] = useState(false)
+  const [showAddBedSheet, setShowAddBedSheet] = useState(false)
   const [pendingNewBedId, setPendingNewBedId] = useState<string | null>(null)
   const inlineDetailRef = useRef<HTMLDivElement | null>(null)
 
@@ -218,6 +219,19 @@ export default function EditorClient({
           {locked ? (
             <div className="flex items-center gap-1.5 shrink-0">
               <button
+                onClick={() => setShowAddBedSheet(true)}
+                className="px-2 py-2 rounded-lg text-base touch-manipulation min-h-[40px] border"
+                style={{
+                  color: '#4A7C59',
+                  backgroundColor: '#FFFFFF',
+                  borderColor: '#E8E6DF',
+                }}
+                aria-label="Beet hinzufügen"
+                title="Beet hinzufügen"
+              >
+                ➕
+              </button>
+              <button
                 onClick={() => setShowBackgroundPicker(true)}
                 className="px-2 py-2 rounded-lg text-base touch-manipulation min-h-[40px] border"
                 style={{
@@ -244,14 +258,31 @@ export default function EditorClient({
               </button>
             </div>
           ) : (
-            <button
-              onClick={handleSave}
-              disabled={pending || !dirty}
-              className="px-3 py-2 rounded-lg text-sm font-medium text-white touch-manipulation disabled:opacity-40 shrink-0 min-h-[40px]"
-              style={{ backgroundColor: '#4A7C59' }}
-            >
-              {pending ? '…' : savedFlash ? '✓' : '✓ Speichern'}
-            </button>
+            <div className="flex items-center gap-1.5 shrink-0">
+              {dirty && (
+                <button
+                  onClick={handleDiscard}
+                  disabled={pending}
+                  className="px-3 py-2 rounded-lg text-sm font-medium touch-manipulation min-h-[40px] border disabled:opacity-40"
+                  style={{
+                    color: '#888780',
+                    backgroundColor: '#FFFFFF',
+                    borderColor: '#E8E6DF',
+                  }}
+                  aria-label="Verwerfen"
+                >
+                  ✕
+                </button>
+              )}
+              <button
+                onClick={handleSave}
+                disabled={pending || !dirty}
+                className="px-3 py-2 rounded-lg text-sm font-medium text-white touch-manipulation disabled:opacity-40 min-h-[40px]"
+                style={{ backgroundColor: '#4A7C59' }}
+              >
+                {pending ? '…' : savedFlash ? '✓' : '✓ Speichern'}
+              </button>
+            </div>
           )}
         </header>
 
@@ -323,19 +354,6 @@ export default function EditorClient({
           customBackgroundOpacity={customBackgroundOpacity}
         />
 
-        {!locked && dirty && (
-          <div className="mt-3 flex justify-end">
-            <button
-              onClick={handleDiscard}
-              disabled={pending}
-              className="text-xs px-3 py-2 rounded touch-manipulation"
-              style={{ color: '#888780', backgroundColor: '#F0EFEA' }}
-            >
-              Verwerfen
-            </button>
-          </div>
-        )}
-
         {locked && selectedView && (
           <div className="mt-3" ref={inlineDetailRef}>
             <BedInlineView
@@ -351,12 +369,6 @@ export default function EditorClient({
             Tipp ein Beet an, um zu sehen, was darin steht.
           </p>
         )}
-
-        {locked && (
-          <div className="mt-6">
-            <AddBedForm onAdded={(bedId) => setPendingNewBedId(bedId)} />
-          </div>
-        )}
       </div>
 
       {showBackgroundPicker && (
@@ -365,6 +377,13 @@ export default function EditorClient({
           customUrl={customBackgroundUrl}
           customOpacity={customBackgroundOpacity}
           onClose={() => setShowBackgroundPicker(false)}
+        />
+      )}
+
+      {showAddBedSheet && (
+        <AddBedSheet
+          onAdded={(bedId) => setPendingNewBedId(bedId)}
+          onClose={() => setShowAddBedSheet(false)}
         />
       )}
     </div>

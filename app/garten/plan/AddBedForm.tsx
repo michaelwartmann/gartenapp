@@ -8,10 +8,19 @@ type Props = {
   /** Stage 8.2 — called with the new bed's id after createBed succeeds.
    *  EditorClient uses this to auto-select the new bed so the user sees it. */
   onAdded?: (bedId: string) => void
+  /** Stage 11B — when used inside AddBedSheet, the form starts already
+   *  expanded (skip the dashed-button collapsed state). */
+  startOpen?: boolean
+  /** Stage 11B — hide the "Abbrechen" button (sheet has its own close). */
+  hideCollapse?: boolean
 }
 
-export default function AddBedForm({ onAdded }: Props = {}) {
-  const [open, setOpen] = useState(false)
+export default function AddBedForm({
+  onAdded,
+  startOpen = false,
+  hideCollapse = false,
+}: Props = {}) {
+  const [open, setOpen] = useState(startOpen)
   const [label, setLabel] = useState('')
   const [kind, setKind] = useState<string>('beet')
   const [pending, startTransition] = useTransition()
@@ -101,17 +110,19 @@ export default function AddBedForm({ onAdded }: Props = {}) {
         >
           {pending ? '…' : 'Anlegen'}
         </button>
-        <button
-          onClick={() => {
-            reset()
-            setOpen(false)
-          }}
-          disabled={pending}
-          className="flex-1 px-4 py-3 rounded-lg text-base font-medium border min-h-[48px] touch-manipulation"
-          style={{ borderColor: '#E8E6DF', color: '#888780' }}
-        >
-          Abbrechen
-        </button>
+        {!hideCollapse && (
+          <button
+            onClick={() => {
+              reset()
+              setOpen(false)
+            }}
+            disabled={pending}
+            className="flex-1 px-4 py-3 rounded-lg text-base font-medium border min-h-[48px] touch-manipulation"
+            style={{ borderColor: '#E8E6DF', color: '#888780' }}
+          >
+            Abbrechen
+          </button>
+        )}
       </div>
     </div>
   )

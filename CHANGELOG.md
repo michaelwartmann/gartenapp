@@ -4,6 +4,23 @@ Alle nennenswerten Änderungen an der Gartenapp, in umgekehrter chronologischer 
 
 ---
 
+## Stage 11 — Editor-Polish (2026-05-03)
+
+Drei Live-Test-Stolpersteine, in einem Push abgeräumt — keine Schema-Änderung.
+
+- **„✕ Verwerfen"-Knopf in den Edit-Mode-Header** gehoben, links neben „✓ Speichern". Vorher saß er klein rechts unter dem Canvas und war leicht zu übersehen. Jetzt sind Save + Discard gleich prominent — beides primary actions im selben Header-Cluster.
+- **„➕ Beet"-Knopf im Lock-Mode-Header** statt permanent ausgeklappte AddBedForm unter dem Canvas. Tap öffnet den neuen `AddBedSheet` als Bottom-Sheet (gleiches Pattern wie BackgroundPicker, HarvestSheet). Header-Reihe im Lock-Mode jetzt: ➕ 🎨 ✏️. AddBedForm bekam zwei optionale Props (`startOpen`, `hideCollapse`) für Sheet-Mode.
+- **BackgroundPicker Live-Preview** — Theme-Tiles zeigen jetzt das WebP mit der Theme-Opazität (0.35–0.55) PLUS zwei Schatten-Beet-Rechtecke (`<ShadowBeds />`-Helper) overlaid. Genau wie's auf dem Canvas aussehen wird, kein Surprise nach dem Tap. Custom-Tile mit hochgeladenem Foto zeigt's auch mit der eigenen Opazität + Schatten-Beeten.
+
+Files:
+- `app/garten/plan/editor/EditorClient.tsx` — Header-Reorg, Verwerfen + ➕ Beet, Inline AddBedForm-Slot raus, AddBedSheet mount
+- `app/garten/plan/AddBedForm.tsx` — `startOpen` + `hideCollapse` Props (für Sheet-Mode)
+- `app/garten/plan/AddBedSheet.tsx` (neu) — Bottom-Sheet Hülle um AddBedForm
+- `app/garten/plan/BackgroundPicker.tsx` — Tile-Render mit Opazität-Overlay + ShadowBeds; Custom-Tile gleiche Behandlung
+- `app/garten/plan/page.tsx` — Comment-Update (kein Code-Change)
+
+---
+
 ## Stage 5C — Eigener Foto-Hintergrund pro Garten (2026-05-03)
 
 Stage 8.1 hat 6 kuratierte Themes geliefert; 5C macht den Hintergrund persönlich. Architektur war bereits vorbereitet (Konva bottom-Layer, `gardens.background_key`-Schema, Picker-Sheet) — alles eingesteckt + Upload-Pipeline gebaut.

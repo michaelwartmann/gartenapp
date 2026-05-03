@@ -57,9 +57,9 @@ export default async function GartenPlanPage() {
     )
   }
 
-  // EditorClient now mounts AddBedForm internally (so it can wire onAdded
-  // → auto-select the new bed). The empty-state branch above keeps the
-  // standalone AddBedForm because there's no editor to mount yet.
+  // EditorClient mounts AddBedSheet via its + Beet header button (Stage 11B).
+  // The empty-state branch above keeps the standalone AddBedForm because
+  // there's no editor to mount yet.
   return (
     <EditorClient
       views={views}
