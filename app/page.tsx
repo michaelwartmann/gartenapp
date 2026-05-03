@@ -278,13 +278,22 @@ export default async function Home() {
       <div className="w-full max-w-md mx-auto">
         <header className="mb-6 flex items-center justify-between gap-2">
           <h1 className="text-xl text-gray-600 truncate">🌱 Mein Garten</h1>
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-1.5 shrink-0">
             <Link
               href="/garten/plan"
-              className="text-sm font-medium px-3 py-2 rounded-lg border touch-manipulation"
+              className="text-sm font-medium px-2.5 py-2 rounded-lg border touch-manipulation"
               style={{ borderColor: '#4A7C59', color: '#4A7C59' }}
+              aria-label="Garten-Plan"
             >
-              🗺️ Plan
+              🗺️
+            </Link>
+            <Link
+              href="/garten/bilanz"
+              className="text-sm font-medium px-2.5 py-2 rounded-lg border touch-manipulation"
+              style={{ borderColor: '#4A7C59', color: '#4A7C59' }}
+              aria-label="Bilanz"
+            >
+              📊
             </Link>
             <Link
               href="/browse"

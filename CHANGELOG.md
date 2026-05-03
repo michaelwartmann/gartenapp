@@ -4,6 +4,39 @@ Alle nennenswerten Änderungen an der Gartenapp, in umgekehrter chronologischer 
 
 ---
 
+## Stage 10 — Garten-Bilanz mit Lerntagebuch-Framing (2026-05-03)
+
+Mit Stage 9 sammeln wir Ernte-Daten — Stage 10 macht sie sichtbar. Aber nicht als Erfolgs-Scorecard: Kim hat explizit „Ertrag im Sinne von Lernen" gesagt, also sind Misserfolge gleich wichtig wie Erträge. Wenn eine Pflanze stirbt, ist das ein Datenpunkt für nächste Saison.
+
+- **Neue Spalte `bed_plantings.removed_reason`** mit 7-Wert-Constraint (`saison_ende`, `frost`, `schaedlinge`, `krankheit`, `eingegangen`, `umgepflanzt`, `anderes`). NULL bleibt erlaubt für Bestand. Schema-Migration in `notes/stage-10-schema.sql`.
+- **HarvestSheet erweitert** — „🪦 Pflanze raus" expandiert jetzt einen Reason-Picker inline (7-Knopf-Grid, tone-coded: positive=grün, loss=terrakotta, event=blau, neutral=grau). Tap auf einen Wert = sofort speichern, kein zweiter Confirm. Ein-Tap-Flow für jeden Grund, default-Erscheinungsbild kommuniziert „Saison-Ende ist normal, Verluste sind eine Lernen-Sache, nicht Versagen".
+- **Single source `lib/removedReasons.ts`** — Keys, Labels, Emojis, Tone-Klassifikation, optional `hint`-Strings für die Lerntagebuch-Sektion (z.B. „Frost → nächstes Jahr Vlies oder später pflanzen").
+- **Neue Bilanz-Seite `/garten/bilanz`** — Server-Component mit 5 Sektionen:
+  1. **Kopf-Numbers** — „N geerntet · M Ernten · K verloren"
+  2. **🏆 Highlights** — erste Ernte, schwerste Einzelernte, konstanteste Pflanze, stärkste Woche
+  3. **🌱 Pro Pflanze** — sortiert nach Ernte-Häufigkeit, mit Kawaii-Thumbnail; Tap → Plant-Detail
+  4. **📦 Pro Beet** — wer hat geliefert?
+  5. **📈 Pro Woche** — server-rendered SVG-Bars (Mini-Chart, only shown if ≥3 weeks of data)
+  6. **💔 Was nicht klappte** — Pflanzen mit `removed_reason` aus Loss/Event-Tone, mit kontextuellem Lerneffekt-Hint („💡 Schädlings-Kontrolle früher checken"). Empty-State: „Diese Saison ist alles geblieben — toll!"
+- **Year-Switcher** oben rechts — Default = aktuelles Jahr, zeigt nur Jahre mit ≥1 Datenpunkt. URL `?year=2026` für Sharability.
+- **Home-Header** bekommt 📊-Knopf neben 🗺️ Plan, beide auf Emoji-only verkürzt damit der „+ Pflanzen"-Button daneben Platz hat.
+- **`getGardenBilanz(year)`** Server-Action aggregiert alles in 3 Queries (harvests, removed bed_plantings, available years).
+- **`recordHarvest`** akzeptiert optional `removedReason`, validiert + persistiert. Default `'saison_ende'` wenn `endPlanting=true` ohne Grund.
+
+Files:
+- `notes/stage-10-schema.sql` (neu) — Schema-Migration
+- `lib/removedReasons.ts` (neu) — Single source of truth
+- `lib/supabase.ts` — `BedPlanting.removed_reason`
+- `app/garten/plan/actions.ts` — `recordHarvest` mit `removedReason`-Param + neue `getGardenBilanz()` mit ~5 Aggregations-Sektionen
+- `app/garten/plan/HarvestSheet.tsx` — Reason-Picker statt direktem submit
+- `app/garten/bilanz/page.tsx` (neu) — Bilanz-Page
+- `app/garten/bilanz/WeeklyBars.tsx` (neu) — SVG-Mini-Chart
+- `app/page.tsx` — 📊 Bilanz-Link im Home-Header
+
+Schema-Migration anwenden via Supabase SQL-Editor *vor* dem ersten „Pflanze raus"-Tap, sonst PGRST204-Pattern.
+
+---
+
 ## Stage 9 — Ernte-Tracking als Verlaufs-Erfassung (2026-05-03)
 
 Heutiges 🌾 Abgeerntet war binär: ein Tap setzte `bed_plantings.removed_at = today` und die Pflanze galt als „weg". Eine Pflücksalat-Saison kollabierte auf ein einziges Event, kein Mengenkontext, keine Bilanz. Kim hat explizit nach Ertrags-Tracking gefragt, also: Verlaufs-Log mit pflanzentyp-abhängiger Einheit.

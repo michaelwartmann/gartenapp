@@ -13,6 +13,7 @@ import type { Bed, BedKind, BedShape, Plant } from '@/lib/supabase'
 import { VALID_BED_KINDS } from '@/lib/bedKinds'
 import { isValidBackgroundKey } from '@/lib/canvasBackgrounds'
 import { isValidHarvestUnit } from '@/lib/harvestUnits'
+import { isValidRemovedReason } from '@/lib/removedReasons'
 import type { Harvest } from '@/lib/supabase'
 
 const VALID_BED_SHAPES: BedShape[] = ['rect', 'ellipse']
@@ -1008,6 +1009,12 @@ export type RecordHarvestInput = {
   notes?: string | null
   /** When true, also set bed_plantings.removed_at = harvest date ("Pflanze raus"). */
   endPlanting?: boolean
+  /**
+   * Stage 10 — required when endPlanting=true. One of REMOVED_REASONS keys.
+   * Defaults to 'saison_ende' if endPlanting=true and no reason given.
+   * Ignored when endPlanting=false.
+   */
+  removedReason?: string | null
 }
 
 export type RecordHarvestResult =
@@ -1055,9 +1062,16 @@ export async function recordHarvest(
   }
 
   if (input.endPlanting) {
+    // Stage 10 — also persist the removed_reason. Default to 'saison_ende'
+    // when not specified or invalid (= matches the historical 1-tap flow).
+    const reasonRaw = input.removedReason
+    const removedReason =
+      typeof reasonRaw === 'string' && isValidRemovedReason(reasonRaw)
+        ? reasonRaw
+        : 'saison_ende'
     const { error: upErr } = await supabase
       .from('bed_plantings')
-      .update({ removed_at: harvestedAt })
+      .update({ removed_at: harvestedAt, removed_reason: removedReason })
       .eq('id', input.plantingId)
     if (upErr) {
       console.error('recordHarvest end-planting update failed:', upErr)
@@ -1296,3 +1310,414 @@ export async function getPlantHarvestHistory(
 
 // HarvestUnit is re-exported from `lib/harvestUnits` directly — re-exporting
 // types from a 'use server' module is rejected by the RSC compiler.
+
+// ─────────────────────────────────────────────────────────────────────────
+// Stage 10 — Garten-Bilanz (per-plant, per-bed, per-week, highlights, losses)
+// ─────────────────────────────────────────────────────────────────────────
+
+export type BilanzPlantRow = {
+  plantId: string
+  plantName: string
+  plantCategory: string
+  plantIllustrationUrl: string | null
+  count: number
+  /** sum per unit (since plants can mix units across plantings) */
+  byUnit: Array<{ unit: string; total: number }>
+}
+
+export type BilanzBedRow = {
+  bedId: string
+  bedLabel: string
+  bedKind: string
+  count: number
+  byUnit: Array<{ unit: string; total: number }>
+}
+
+export type BilanzWeekRow = {
+  /** ISO week label like "KW 22" */
+  weekLabel: string
+  /** Year + week, used for sort */
+  weekKey: string
+  /** Sum of all amounts that week, ignoring unit (raw measure of activity) */
+  totalAmount: number
+  count: number
+}
+
+export type BilanzHighlight =
+  | { kind: 'first'; date: string; plantName: string; amount: number; unit: string }
+  | { kind: 'biggest'; date: string; plantName: string; amount: number; unit: string }
+  | { kind: 'most_consistent'; plantName: string; count: number; totalAmount: number; unit: string }
+  | { kind: 'busiest_week'; weekLabel: string; count: number }
+
+export type BilanzLoss = {
+  plantingId: string
+  plantId: string
+  plantName: string
+  plantCategory: string
+  bedLabel: string
+  bedKind: string
+  removedAt: string
+  reasonKey: string
+}
+
+export type GardenBilanz = {
+  year: number
+  availableYears: number[]
+  plantedCount: number
+  harvestedPlantCount: number
+  harvestEventCount: number
+  lossCount: number
+  perPlant: BilanzPlantRow[]
+  perBed: BilanzBedRow[]
+  perWeek: BilanzWeekRow[]
+  highlights: BilanzHighlight[]
+  losses: BilanzLoss[]
+}
+
+function isoWeekLabel(iso: string): { label: string; key: string } {
+  // Compute ISO week (Mon–Sun) for a YYYY-MM-DD date.
+  const d = new Date(`${iso}T00:00:00Z`)
+  const target = new Date(d.valueOf())
+  const dayNr = (d.getUTCDay() + 6) % 7
+  target.setUTCDate(target.getUTCDate() - dayNr + 3)
+  const firstThursday = target.valueOf()
+  target.setUTCMonth(0, 1)
+  if (target.getUTCDay() !== 4) {
+    target.setUTCMonth(0, 1 + ((4 - target.getUTCDay()) + 7) % 7)
+  }
+  const weekNo = 1 + Math.ceil((firstThursday - target.valueOf()) / 604800000)
+  const year = new Date(`${iso}T00:00:00Z`).getUTCFullYear()
+  const wk = String(weekNo).padStart(2, '0')
+  return { label: `KW ${weekNo}`, key: `${year}-${wk}` }
+}
+
+export async function getGardenBilanz(year?: number): Promise<GardenBilanz | null> {
+  const gardenId = await getCurrentGardenId()
+  if (!gardenId) return null
+  const supabase = adminClient()
+  const targetYear = year && Number.isFinite(year) ? year : currentYear()
+  const yearStart = `${targetYear}-01-01`
+  const yearEnd = `${targetYear}-12-31`
+
+  // 1) All harvests in the year, joined to planting → bed + plant
+  const { data: harvests, error: hErr } = await supabase
+    .from('harvests')
+    .select(
+      'id, amount, unit, harvested_at, bed_planting_id, ' +
+        'bed_plantings!inner(id, plant_id, ' +
+        'beds!inner(id, label, kind, garden_id), ' +
+        'plants(id, name, category, illustration_url))'
+    )
+    .eq('garden_id', gardenId)
+    .gte('harvested_at', yearStart)
+    .lte('harvested_at', yearEnd)
+    .order('harvested_at', { ascending: true })
+  if (hErr) {
+    console.error('getGardenBilanz harvests query failed:', hErr)
+    return null
+  }
+
+  // 2) Plantings ended that year (for losses + plantedCount), via bed_plantings
+  const { data: removedRows, error: rErr } = await supabase
+    .from('bed_plantings')
+    .select(
+      'id, plant_id, removed_at, removed_reason, season_year, ' +
+        'beds!inner(id, label, kind, garden_id), ' +
+        'plants(id, name, category)'
+    )
+    .gte('removed_at', yearStart)
+    .lte('removed_at', yearEnd)
+  if (rErr) {
+    console.error('getGardenBilanz removed query failed:', rErr)
+  }
+
+  // 3) Determine availableYears (any year with ≥1 harvest OR ≥1 removed)
+  const { data: allYearsHarv } = await supabase
+    .from('harvests')
+    .select('harvested_at')
+    .eq('garden_id', gardenId)
+  const { data: allYearsBeds } = await supabase
+    .from('bed_plantings')
+    .select('removed_at, planted_at, season_year, beds!inner(garden_id)')
+    .not('season_year', 'is', null)
+  const yearSet = new Set<number>()
+  for (const h of (allYearsHarv ?? []) as { harvested_at: string }[]) {
+    yearSet.add(new Date(`${h.harvested_at}T00:00:00Z`).getUTCFullYear())
+  }
+  type YBRow = {
+    removed_at: string | null
+    planted_at: string | null
+    season_year: number | null
+    beds: { garden_id: string } | Array<{ garden_id: string }> | null
+  }
+  for (const r of (allYearsBeds ?? []) as YBRow[]) {
+    const b = Array.isArray(r.beds) ? r.beds[0] : r.beds
+    if (!b || b.garden_id !== gardenId) continue
+    if (r.season_year) yearSet.add(r.season_year)
+    if (r.removed_at) {
+      yearSet.add(new Date(`${r.removed_at}T00:00:00Z`).getUTCFullYear())
+    }
+  }
+  yearSet.add(targetYear)
+  const availableYears = [...yearSet].sort((a, b) => b - a)
+
+  // 4) Aggregate from harvests
+  type HRow = {
+    id: string
+    amount: number | string
+    unit: string
+    harvested_at: string
+    bed_planting_id: string
+    bed_plantings: {
+      id: string
+      plant_id: string
+      beds:
+        | { id: string; label: string; kind: string; garden_id: string }
+        | Array<{ id: string; label: string; kind: string; garden_id: string }>
+        | null
+      plants:
+        | { id: string; name: string; category: string; illustration_url: string | null }
+        | Array<{ id: string; name: string; category: string; illustration_url: string | null }>
+        | null
+    } | Array<{
+      id: string
+      plant_id: string
+      beds:
+        | { id: string; label: string; kind: string; garden_id: string }
+        | Array<{ id: string; label: string; kind: string; garden_id: string }>
+        | null
+      plants:
+        | { id: string; name: string; category: string; illustration_url: string | null }
+        | Array<{ id: string; name: string; category: string; illustration_url: string | null }>
+        | null
+    }> | null
+  }
+
+  type Bucket = {
+    plantId: string
+    plantName: string
+    plantCategory: string
+    plantIllustrationUrl: string | null
+    bedId: string
+    bedLabel: string
+    bedKind: string
+    amount: number
+    unit: string
+    harvested_at: string
+  }
+
+  const events: Bucket[] = []
+  for (const row of (harvests ?? []) as unknown as HRow[]) {
+    const bp = Array.isArray(row.bed_plantings) ? row.bed_plantings[0] : row.bed_plantings
+    if (!bp) continue
+    const b = Array.isArray(bp.beds) ? bp.beds[0] : bp.beds
+    if (!b || b.garden_id !== gardenId) continue
+    const p = Array.isArray(bp.plants) ? bp.plants[0] : bp.plants
+    if (!p) continue
+    events.push({
+      plantId: p.id,
+      plantName: p.name,
+      plantCategory: p.category,
+      plantIllustrationUrl: p.illustration_url,
+      bedId: b.id,
+      bedLabel: b.label,
+      bedKind: b.kind,
+      amount: Number(row.amount),
+      unit: row.unit,
+      harvested_at: row.harvested_at,
+    })
+  }
+
+  // Per-plant
+  const perPlantMap = new Map<string, BilanzPlantRow & { _byUnit: Map<string, number> }>()
+  for (const e of events) {
+    let row = perPlantMap.get(e.plantId)
+    if (!row) {
+      row = {
+        plantId: e.plantId,
+        plantName: e.plantName,
+        plantCategory: e.plantCategory,
+        plantIllustrationUrl: e.plantIllustrationUrl,
+        count: 0,
+        byUnit: [],
+        _byUnit: new Map(),
+      }
+      perPlantMap.set(e.plantId, row)
+    }
+    row.count++
+    row._byUnit.set(e.unit, (row._byUnit.get(e.unit) ?? 0) + e.amount)
+  }
+  const perPlant: BilanzPlantRow[] = [...perPlantMap.values()]
+    .map(({ _byUnit, ...r }) => ({
+      ...r,
+      byUnit: [..._byUnit.entries()]
+        .map(([unit, total]) => ({ unit, total }))
+        .sort((a, b) => b.total - a.total),
+    }))
+    .sort((a, b) => b.count - a.count)
+
+  // Per-bed
+  const perBedMap = new Map<string, BilanzBedRow & { _byUnit: Map<string, number> }>()
+  for (const e of events) {
+    let row = perBedMap.get(e.bedId)
+    if (!row) {
+      row = {
+        bedId: e.bedId,
+        bedLabel: e.bedLabel,
+        bedKind: e.bedKind,
+        count: 0,
+        byUnit: [],
+        _byUnit: new Map(),
+      }
+      perBedMap.set(e.bedId, row)
+    }
+    row.count++
+    row._byUnit.set(e.unit, (row._byUnit.get(e.unit) ?? 0) + e.amount)
+  }
+  const perBed: BilanzBedRow[] = [...perBedMap.values()]
+    .map(({ _byUnit, ...r }) => ({
+      ...r,
+      byUnit: [..._byUnit.entries()]
+        .map(([unit, total]) => ({ unit, total }))
+        .sort((a, b) => b.total - a.total),
+    }))
+    .sort((a, b) => b.count - a.count)
+
+  // Per-week (raw activity, ignores unit because we just want a sense of "when")
+  const perWeekMap = new Map<string, BilanzWeekRow>()
+  for (const e of events) {
+    const { label, key } = isoWeekLabel(e.harvested_at)
+    let row = perWeekMap.get(key)
+    if (!row) {
+      row = { weekLabel: label, weekKey: key, totalAmount: 0, count: 0 }
+      perWeekMap.set(key, row)
+    }
+    row.count++
+    row.totalAmount += e.amount
+  }
+  const perWeek = [...perWeekMap.values()].sort((a, b) =>
+    a.weekKey.localeCompare(b.weekKey)
+  )
+
+  // Highlights
+  const highlights: BilanzHighlight[] = []
+  if (events.length > 0) {
+    const first = events[0] // events are ordered ascending by date
+    highlights.push({
+      kind: 'first',
+      date: first.harvested_at,
+      plantName: first.plantName,
+      amount: first.amount,
+      unit: first.unit,
+    })
+    const biggest = events.reduce((a, b) => (b.amount > a.amount ? b : a))
+    if (biggest !== first || events.length > 1) {
+      highlights.push({
+        kind: 'biggest',
+        date: biggest.harvested_at,
+        plantName: biggest.plantName,
+        amount: biggest.amount,
+        unit: biggest.unit,
+      })
+    }
+    const mostConsistent = perPlant[0]
+    if (mostConsistent && mostConsistent.count >= 2) {
+      const top = mostConsistent.byUnit[0]
+      if (top) {
+        highlights.push({
+          kind: 'most_consistent',
+          plantName: mostConsistent.plantName,
+          count: mostConsistent.count,
+          totalAmount: top.total,
+          unit: top.unit,
+        })
+      }
+    }
+    if (perWeek.length >= 1) {
+      const busiest = perWeek.reduce((a, b) => (b.count > a.count ? b : a))
+      if (busiest.count >= 2) {
+        highlights.push({
+          kind: 'busiest_week',
+          weekLabel: busiest.weekLabel,
+          count: busiest.count,
+        })
+      }
+    }
+  }
+
+  // Losses (only loss/event tone — saison_ende and umgepflanzt aren't losses)
+  type RRow = {
+    id: string
+    plant_id: string
+    removed_at: string | null
+    removed_reason: string | null
+    season_year: number | null
+    beds:
+      | { id: string; label: string; kind: string; garden_id: string }
+      | Array<{ id: string; label: string; kind: string; garden_id: string }>
+      | null
+    plants:
+      | { id: string; name: string; category: string }
+      | Array<{ id: string; name: string; category: string }>
+      | null
+  }
+  const losses: BilanzLoss[] = []
+  for (const row of (removedRows ?? []) as unknown as RRow[]) {
+    const b = Array.isArray(row.beds) ? row.beds[0] : row.beds
+    if (!b || b.garden_id !== gardenId) continue
+    const p = Array.isArray(row.plants) ? row.plants[0] : row.plants
+    if (!p) continue
+    if (!row.removed_at || !row.removed_reason) continue
+    if (
+      row.removed_reason === 'saison_ende' ||
+      row.removed_reason === 'umgepflanzt' ||
+      row.removed_reason === 'anderes'
+    ) {
+      continue
+    }
+    losses.push({
+      plantingId: row.id,
+      plantId: p.id,
+      plantName: p.name,
+      plantCategory: p.category,
+      bedLabel: b.label,
+      bedKind: b.kind,
+      removedAt: row.removed_at,
+      reasonKey: row.removed_reason,
+    })
+  }
+  losses.sort((a, b) => (a.removedAt < b.removedAt ? 1 : -1))
+
+  // plantedCount (any planting that was active in the year — planted_at <= year-end and (removed_at is null OR removed_at >= year-start))
+  const { data: activePlantings } = await supabase
+    .from('bed_plantings')
+    .select('plant_id, season_year, planted_at, removed_at, beds!inner(garden_id)')
+    .or(`season_year.eq.${targetYear},planted_at.lte.${yearEnd}`)
+  const plantedSet = new Set<string>()
+  type APRow = {
+    plant_id: string
+    season_year: number | null
+    planted_at: string | null
+    removed_at: string | null
+    beds: { garden_id: string } | Array<{ garden_id: string }> | null
+  }
+  for (const r of (activePlantings ?? []) as APRow[]) {
+    const b = Array.isArray(r.beds) ? r.beds[0] : r.beds
+    if (!b || b.garden_id !== gardenId) continue
+    if (r.season_year && r.season_year === targetYear) plantedSet.add(r.plant_id)
+  }
+
+  return {
+    year: targetYear,
+    availableYears,
+    plantedCount: plantedSet.size,
+    harvestedPlantCount: perPlant.length,
+    harvestEventCount: events.length,
+    lossCount: losses.length,
+    perPlant,
+    perBed,
+    perWeek,
+    highlights,
+    losses,
+  }
+}
