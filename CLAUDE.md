@@ -233,12 +233,12 @@ Stages shipped on top of v1.0 — siehe `CHANGELOG.md` für Details:
 - ✅ **Stage 10** (2026-05-03): Garten-Bilanz mit Lerntagebuch-Framing — neue Seite `/garten/bilanz` (📊-Link im Home-Header). 5 Sektionen: Highlights, Pro Pflanze, Pro Beet, Pro Woche (SVG-Bars), Was nicht klappte. Stage 9 „Pflanze raus" bekommt Reason-Picker (`bed_plantings.removed_reason` mit 7-Wert-Constraint, `lib/removedReasons.ts`). Misserfolge sind first-class — eingegangene Pflanzen mit Lerneffekt-Hint („💡 nächstes Jahr Vlies"). Year-Switcher bei ≥2 Saisons.
 - ✅ **Stage 5C** (2026-05-03): Eigener Foto-Hintergrund pro Garten — `gardens.background_url` + `background_opacity` neu, Storage-Bucket `garden-bg` (Public). 📸-Tile im BackgroundPicker mit File-Picker → Client-Side Canvas-Compression auf 768 px WebP @ q78 → Server-Action-Upload via FormData. Opacity-Slider (0–100%, Commit auf release) + 🗑️ Entfernen wenn Custom aktiv. `customBackground()` Helper in `lib/canvasBackgrounds.ts`, key='custom' triggert Branch in CanvasBackground.
 - ✅ **Stage 11** (2026-05-03): Editor-Polish — „✕ Verwerfen"-Knopf in den Edit-Mode-Header gehoben (gleichwertig zu Save), „➕ Beet"-Knopf im Lock-Mode-Header öffnet `AddBedSheet` (Bottom-Sheet statt permanent inline). BackgroundPicker-Tiles zeigen Theme + Opazität + Schatten-Beete overlaid (`ShadowBeds`-Helper) — Live-Preview matchend mit dem Canvas-Render.
+- ✅ **Stage 12** (2026-05-03): Catalog-Filter erweitert — collapsible Smart-Filter-Panel auf `/browse` mit 5 Achsen (Saatzeit/Erntezeit Monats-Picker, Lebenszyklus/Zehrertyp/Standort Pill-Trios), active-Filter-Chips mit ✕, AND-Kombination. Substring-Match auf den strukturierten Plant-Feldern, client-seitig, kein Schema.
 
 Next up:
 
 1. **Stage 5A.2** — expliziter „🌱→📦 Umpflanzen"-Knopf (Vorzucht → Hauptbeet, mit `removed_reason='umgepflanzt'`) für Februar 2027 wenn Vorzucht-Saison startet.
 2. **Stage 4C** (optional) — push notifications / email reminders driven off the daily-tasks pipeline.
-3. **Filter/sort** the catalog by any of the 16 botanical dimensions.
 
 ## 🧪 Release-Readiness
 
