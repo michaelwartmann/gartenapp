@@ -13,6 +13,7 @@ import AddPlantSheet from '../AddPlantSheet'
 import EditBedSheet from '../EditBedSheet'
 import { CurrentChip, LastYearChip } from '../PlantChips'
 import { bedKindIcon, bedKindLabel } from '@/lib/bedKinds'
+import BedPhotoStrip from './BedPhotoStrip'
 
 type Props = {
   view: BedView
@@ -206,6 +207,8 @@ export default function BedInlineView({ view, onDeleted }: Props) {
           </div>
         )}
       </div>
+
+      <BedPhotoStrip bedId={bed.id} bedLabel={bed.label} />
 
       {sheetSeason && (
         <AddPlantSheet

@@ -77,6 +77,17 @@ export type Harvest = {
   created_at: string
 }
 
+/** Stage 13 — single photo of a bed at a point in time (Beet-Tagebuch). */
+export type BedPhoto = {
+  id: string
+  bed_id: string
+  garden_id: string
+  photo_url: string
+  taken_at: string
+  notes: string | null
+  created_at: string
+}
+
 export type { BedKind }
 
 export type BedShape = 'rect' | 'ellipse'
