@@ -4,6 +4,38 @@ Alle nennenswerten Änderungen an der Gartenapp, in umgekehrter chronologischer 
 
 ---
 
+## Stage 9 — Ernte-Tracking als Verlaufs-Erfassung (2026-05-03)
+
+Heutiges 🌾 Abgeerntet war binär: ein Tap setzte `bed_plantings.removed_at = today` und die Pflanze galt als „weg". Eine Pflücksalat-Saison kollabierte auf ein einziges Event, kein Mengenkontext, keine Bilanz. Kim hat explizit nach Ertrags-Tracking gefragt, also: Verlaufs-Log mit pflanzentyp-abhängiger Einheit.
+
+- **Neue `harvests`-Tabelle** als Event-Log (`bed_planting_id`, `amount`, `unit`, `harvested_at`, `notes`). 7-Wert Unit-Constraint (`kg`/`g`/`stueck`/`bund`/`kopf`/`schnitt`/`schale`). Indizes auf `bed_planting_id` + `(garden_id, harvested_at)`.
+- **`plants.harvest_unit`** als Default-Einheit pro Katalog-Pflanze. NULL = keine Mengen-Ernte sinnvoll (Blumen) → 🌾-Button im Chip wird ausgeblendet.
+- **Saubere Semantik-Trennung:** `harvests` = jedes einzelne Ernte-Event. `bed_plantings.removed_at` = „Pflanze ist raus" (Saison-Ende, wird über das Sheet gesetzt). Vorher waren beide Konzepte verwechselt.
+- **Single source of truth `lib/harvestUnits.ts`** — Labels, Singular/Plural, Quick-Amount-Map (`+0.5 kg` / `+1 Bund`), Decimals, Validator. Wird sowohl im Sheet als auch in den Chip-Anzeigen reused.
+- **HarvestSheet** (`app/garten/plan/HarvestSheet.tsx`) — Bottom-Sheet: kontextueller „↩ Letzte: 1 Bund · 28.04 / Bisher diese Saison: 4 Bund"-Hint, Quick-Buttons (2-Tap-Flow für Pflücksalat-Realität), manueller Mengen-Input + Unit-Picker, Datum (Default heute), Notiz. Zwei Aktionen: „✓ Sichern" (loggt + Pflanze bleibt aktiv) und „🪦 Pflanze raus" (loggt + setzt removed_at = harvested_at, ein Sheet-Aufruf).
+- **CurrentChip-Anzeige** zeigt jetzt Saison-Total inline (`🌾 1.2 kg` als Pille im Chip), bei mixed units fallback `🌾 5×`. Tap auf 🌾 öffnet Sheet statt direkt zu markieren. Bei Pflanzen ohne harvest_unit (Blumen) wird der 🌾-Button ausgeblendet.
+- **Plant-Detail Ernte-Verlauf-Sektion** — pro Jahr aggregiert (`Σ 4.8 kg · 12 Einträge`), darunter `<details>` mit allen Events (Datum + Beet + Menge).
+- **Aggregierte Summary in `listBedsForGarden`** — eine zusätzliche Query über alle Plantings, in JS gruppiert. Kein N+1, ein Roundtrip mehr beim Plan-Load. `PlantingHarvestSummary` ist neuer Typ.
+- **`enrichPlantWithGemini` erweitert** — Gemini liefert beim Background-Enrich neuer Pflanzen jetzt auch `harvest_unit` (oder leer für Zier-Pflanzen). Neue Pflanzen kriegen ihre Einheit also automatisch.
+- **Backfill-Skript `npm run backfill-harvest-units`** — Gemini Flash-Lite + JSON-Schema, idempotent, `--all` / `--dry` / `--only=<key>`. Bestand bekommt seine harvest_units in einem Batch.
+
+Files:
+- `notes/stage-9-schema.sql` (neu) — Schema-Migration
+- `lib/harvestUnits.ts` (neu) — Single source of truth
+- `lib/supabase.ts` — `Plant.harvest_unit` + neuer `Harvest`-Type
+- `lib/enrichPlant.ts` — `harvest_unit` ins Gemini-Schema + Return + Description
+- `app/garten/plan/actions.ts` — `recordHarvest`, `deleteHarvest`, `getHarvestSummaryForPlanting`, `listHarvestsForPlanting`, `getPlantHarvestHistory`; `listBedsForGarden` aggregiert Harvests
+- `app/garten/plan/HarvestSheet.tsx` (neu) — Sheet mit Quick-Buttons + manuell + Pflanze-raus
+- `app/garten/plan/PlantChips.tsx` — `CurrentChip` öffnet Sheet, zeigt Saison-Total
+- `app/garten/plan/editor/BedInlineView.tsx` — onHarvest-Callback entfällt (handled im Chip)
+- `app/browse/add/actions.ts` — schreibt `harvest_unit` ins Plant nach Gemini-Enrich
+- `app/plants/[id]/page.tsx` — Ernte-Verlauf-Sektion mit per-Jahr-Aggregation + Event-Liste
+- `scripts/backfill-harvest-units.ts` (neu) + `package.json` (npm-script)
+
+Schema-Migration anwenden via Supabase SQL-Editor *vor* dem ersten Sheet-Tap, sonst PGRST204 wie bei Stage 5B.1.
+
+---
+
 ## Stage 8.2 — Browse-Findability + smart Categorization + No-Overlap-AutoLayout (2026-05-03)
 
 Drei UX-Mängel aus Kim-Live-Test:

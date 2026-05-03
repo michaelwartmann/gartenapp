@@ -168,6 +168,12 @@ export async function createPlantAndAdd(
         if (enriched.suitable_bed_kinds.length > 0) {
           update.suitable_bed_kinds = enriched.suitable_bed_kinds
         }
+        // Stage 9 — set harvest_unit from Gemini if it returned a known value.
+        // Empty string is a valid signal for "no harvest unit" (flowers etc.) →
+        // leave column NULL.
+        if (enriched.harvest_unit) {
+          update.harvest_unit = enriched.harvest_unit
+        }
         // Stage 8.2: smart merge of Gemini's category suggestions with the
         // user's pick.
         //   - If there is ANY overlap → user's pick is meaningful, augment

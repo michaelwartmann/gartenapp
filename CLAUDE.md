@@ -129,6 +129,10 @@ npm run backfill-categories
 # Idempotent: skips themes whose file already exists. --force to regenerate, --only=KEY for one.
 npm run generate-backgrounds
 
+# Stage 9 — backfill plants.harvest_unit (kg, bund, kopf, schnitt, stueck, schale, g, NULL für Blumen).
+# Idempotent: only fills WHERE harvest_unit IS NULL. Pass --all to overwrite, --dry für Vorschau.
+npm run backfill-harvest-units
+
 # Bulk-set garden locations from scripts/locations.json
 # (admin task — for setting many gardens' PLZ at once)
 npm run set-locations
@@ -224,14 +228,14 @@ Stages shipped on top of v1.0 — siehe `CHANGELOG.md` für Details:
 - ✅ **Stage 8** (2026-05-03): Plan-Page Polish — Skizze wird zur primären Plan-Ansicht. Lock-Toggle 🔒/🔓 (Default locked: nur Tap-to-select, kein Drag). Inline-Beet-Detail unter Canvas (Pflanzen-Chips + ✏️/🗑️-Aktionen) wenn ein Beet selektiert ist. Pflanzen-Thumbnails (`<KonvaImage>` via `use-image`) auf den Bed-Formen, bis 3 + N-Badge, min 22 px (sonst hidden). `BedCard.tsx` ist abgelöst durch `BedInlineView.tsx`, Chips in shared `PlantChips.tsx`. `/garten/plan/editor` ist Redirect-Stub.
 - ✅ **Stage 8.1** (2026-05-03): Skizzen-Hintergründe + Small-Bed-Polish — 6 kuratierte Themes (Erde, Wiese, Holzdielen, Pastell, Steingarten, Botanik) via `npm run generate-backgrounds` (Gemini Flash-Image, WebP @ 768 px, total 216 KB), per-Garten persistiert in `gardens.background_key`. 🎨-Picker im Editor-Header (locked-Mode), `<KonvaImage>` als unterster Layer mit Cover-Fit + Theme-spezifischer Opazität (0.35–0.55). Small-Bed-Lesbarkeit: Kind-Icon weg < 70 px, Label-Font 14→12→10, Mini-Beete (< 50×36) zeigen 2 Buchstaben + voller Inhalt im Inline-Detail.
 - ✅ **Stage 8.2** (2026-05-03): Live-Test-Fixes — „+ Pflanze fehlt?"-CTA aus dem Footer in die Filter-Zeile (Findability), Smart-Categorization im AddPlantForm (`lib/classifyPlantCategories.ts` + Live-Hint via Debounced Gemini-Call + Soft-Confirm bei Konflikt + actions.ts Merge→Replace bei Zero-Overlap), Overlap-aware `assignDefaultPositions()` für neue Beete (kein top-left-Stapel mehr), Auto-Select neuer Bed mit Scroll-into-View nach AddBedForm-Submit.
+- ✅ **Stage 9** (2026-05-03): Ernte-Tracking als Verlaufs-Erfassung — neue `harvests`-Tabelle (event log), `plants.harvest_unit` (kg/bund/kopf/schnitt/stueck/schale/g, NULL für Blumen), via Gemini im Enrich + `npm run backfill-harvest-units` für Bestand. `HarvestSheet` mit Quick-Buttons (`+1 Bund`/`+0.5 kg`) für continuous-harvest, „🪦 Pflanze raus" als sekundäre Sheet-Aktion (loggt + setzt removed_at). Saison-Total inline im CurrentChip (`🌾 1.2 kg`). Plant-Detail bekommt Ernte-Verlauf-Sektion (per-Jahr aggregiert + Event-Liste).
 
 Next up:
 
-1. **Stage 9** — Ernte-Tracking als Verlaufs-Erfassung statt binärem Flag: neue `harvests`-Tabelle (event log), `plants.harvest_unit` via Gemini-Backfill (`kg`/`bund`/`schnitt`/`kopf`/`stueck`/`schale`), HarvestSheet mit Quick-Buttons für continuous-harvest (Pflücksalat, Schnittlauch, Tomate). „Pflanze raus" als sekundäre Sheet-Aktion.
+1. **Stage 5C** — *eigenes* Foto-Hintergrund-Upload pro Garten (Storage-Subfolder `garden-bg/`, Konva-Image-Layer mit Opazitäts-Slider). Stage 8.1 hat schon kuratierte Themes geliefert; 5C ist die User-Upload-Variante.
 2. **Stage 5A.2** — expliziter „🌱→📦 Umpflanzen"-Knopf (Vorzucht → Hauptbeet) für Februar 2027 wenn Vorzucht-Saison startet.
-3. **Stage 5C** — *eigenes* Foto-Hintergrund-Upload pro Garten (Storage-Subfolder `garden-bg/`, Konva-Image-Layer mit Opazitäts-Slider). Stage 8.1 hat schon kuratierte Themes geliefert; 5C ist die User-Upload-Variante.
-4. **Stage 4C** (optional) — push notifications / email reminders driven off the daily-tasks pipeline.
-5. **Filter/sort** the catalog by any of the 16 botanical dimensions.
+3. **Stage 4C** (optional) — push notifications / email reminders driven off the daily-tasks pipeline.
+4. **Filter/sort** the catalog by any of the 16 botanical dimensions.
 
 ## 🧪 Release-Readiness
 

@@ -56,6 +56,24 @@ export type Plant = {
   stark_oder_schwachzehrer: string
   family: string | null
   suitable_bed_kinds: string[] | null
+  /**
+   * Stage 9 — vom Pflanzen-Typ abhängige Default-Einheit für die Ernte.
+   * NULL = keine Mengen-Ernte sinnvoll (Blumen) → 🌾-Button im Chip
+   * wird ausgeblendet.
+   */
+  harvest_unit: string | null
+  created_at: string
+}
+
+/** Stage 9 — single harvest event for a planting. */
+export type Harvest = {
+  id: string
+  bed_planting_id: string
+  garden_id: string
+  amount: number
+  unit: string
+  harvested_at: string
+  notes: string | null
   created_at: string
 }
 
