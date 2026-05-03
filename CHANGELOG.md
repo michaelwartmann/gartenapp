@@ -4,6 +4,25 @@ Alle nennenswerten Änderungen an der Gartenapp, in umgekehrter chronologischer 
 
 ---
 
+## Stage 12.1 — Filter auch auf Mein Garten Home (2026-05-03)
+
+Stage 12 hatte die 5 Smart-Filter nur auf `/browse` gepackt. Sinnvoller wenn sie genauso auf der Home-Seite (`/`) auf den eigenen Pflanzen wirken — „Welche meiner Samen sind Mehrjährige?", „Welche meiner gepflanzten Sachen muss ich im April säen?".
+
+- **Filter-Logik extrahiert** in `lib/plantFilters.ts` — Types, Konstanten (MONTHS, LIFECYCLES, NUTRIENTS, LIGHTS), `plantMatchesSmart()`, `activeSmartCount()`. Pure functions, kein React.
+- **Filter-UI extrahiert** in `app/PlantFilterPanel.tsx` — collapsible Panel + Active-Chips. Wird sowohl von `/browse` als auch von `/` (Mein Garten) gemounted.
+- **Neuer `MyGardenSections`-Client-Component** — wrappt die zwei bisher server-rendered Sections (Im Garten + Meine Samen) mit shared Filter-State. Filter wirken auf beide Listen unabhängig; per Sektion wird `gefiltert/total` angezeigt wenn ein Filter aktiv ist.
+- **`app/page.tsx` refactored** — Sections-JSX wandert nach `MyGardenSections`, Server-Side bleibt der Rest (Wetter, Diese Woche, Empfehlungen-CTA, Empty-State). `bedsByPlant`-Map wird via `Object.fromEntries()` über die RSC-Boundary serialisiert.
+- **`/browse` SearchFilter** importiert jetzt den shared Panel statt seiner eigenen Inline-Logik.
+
+Files:
+- `lib/plantFilters.ts` (neu) — Filter-Logik + Types
+- `app/PlantFilterPanel.tsx` (neu) — shared UI
+- `app/MyGardenSections.tsx` (neu) — Mein-Garten-Wrapper mit Filter
+- `app/page.tsx` — Sections-Render in MyGardenSections umgezogen, dead code raus
+- `app/browse/SearchFilter.tsx` — auf shared Lib + Panel umgestellt
+
+---
+
 ## Stage 13 — Beet-Tagebuch: Foto-Verlauf pro Beet (2026-05-03)
 
 Kims Idee: vom Beet ein Foto machen, mit Datum speichern, später vergleichen wie's wächst. Lerntagebuch-Visual-Pendant zur Stage-10-Bilanz.

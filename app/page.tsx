@@ -1,5 +1,4 @@
 import Link from 'next/link'
-import Image from 'next/image'
 import { supabaseAdmin, type Plant } from '@/lib/supabase'
 import { getCurrentGardenId } from '@/lib/currentGarden'
 import { getWeeklyTasks } from '@/lib/getWeeklyTasks'
@@ -7,6 +6,7 @@ import { getWeatherForGarden } from '@/lib/getWeatherForGarden'
 import { detectEvents, nearTermEvents } from '@/lib/weatherEvents'
 import WeatherStrip from './wetter/WeatherStrip'
 import WeatherSetup from './wetter/WeatherSetup'
+import MyGardenSections from './MyGardenSections'
 import type {
   PlantedPlantInput,
   Urgency,
@@ -15,19 +15,6 @@ import type {
 
 export const dynamic = 'force-dynamic'
 
-function categoryColor(cat: string): string {
-  switch (cat) {
-    case 'Gemüse': return '#4A7C59'
-    case 'Kraut': return '#C17B5C'
-    case 'Blume': return '#8B5A95'
-    case 'Obst': return '#D49C3D'
-    case 'Baum': return '#5C7C4A'
-    case 'Strauch': return '#8FA376'
-    case 'Nuss': return '#A37D5C'
-    default: return '#888780'
-  }
-}
-
 type BedRef = { kind: string; label: string }
 
 type SplitPlants = {
@@ -35,13 +22,6 @@ type SplitPlants = {
   interested: Plant[]
   plantedForTasks: PlantedPlantInput[]
   bedsByPlant: Map<string, BedRef[]>
-}
-
-const KIND_ICON: Record<string, string> = {
-  beet: '🟫',
-  hochbeet: '📦',
-  gewaechshaus: '🏠',
-  topf: '🪴',
 }
 
 async function getMyPlants(gardenId: string | null): Promise<SplitPlants> {
@@ -198,63 +178,9 @@ function WeeklyTasksSection({ tasks }: { tasks: WeeklyTask[] }) {
   )
 }
 
-function BedLine({ beds }: { beds: BedRef[] }) {
-  if (beds.length === 0) return null
-  const first = beds[0]
-  const extra = beds.length - 1
-  const icon = KIND_ICON[first.kind] ?? '🟫'
-  return (
-    <p
-      className="text-xs mt-1 leading-tight truncate"
-      style={{ color: '#4A7C59' }}
-    >
-      {icon} {first.label}
-      {extra > 0 ? ` · +${extra}` : ''}
-    </p>
-  )
-}
-
-function PlantCard({ plant, beds }: { plant: Plant; beds: BedRef[] }) {
-  return (
-    <Link href={`/plants/${plant.id}`} className="block">
-      <div
-        className="bg-white rounded-xl border overflow-hidden transition-all duration-200 active:scale-95 min-h-[200px]"
-        style={{ borderColor: '#E8E6DF' }}
-      >
-        <div className="aspect-square relative" style={{ backgroundColor: '#FAFAF7' }}>
-          {plant.illustration_url ? (
-            <Image
-              src={plant.illustration_url}
-              alt={plant.name}
-              fill
-              className="object-cover"
-              sizes="(max-width: 480px) 50vw, 200px"
-            />
-          ) : (
-            <div
-              className="absolute inset-0 flex items-center justify-center text-4xl"
-              style={{
-                backgroundColor: categoryColor(plant.category) + '22',
-                color: categoryColor(plant.category),
-              }}
-            >
-              🌱
-            </div>
-          )}
-        </div>
-        <div className="p-4">
-          <h2 className="font-medium text-base leading-tight" style={{ color: '#2C2C2A' }}>
-            {plant.name}
-          </h2>
-          <p className="text-sm mt-1 leading-tight italic" style={{ color: '#888780' }}>
-            {plant.latin_name}
-          </p>
-          <BedLine beds={beds} />
-        </div>
-      </div>
-    </Link>
-  )
-}
+// PlantCard + BedLine moved into MyGardenSections.tsx — only used inside
+// the now-client-component grid. Keep KIND_ICON / categoryColor inlined
+// in MyGardenSections so we don't share them via top-level page.tsx.
 
 export default async function Home() {
   const gardenId = await getCurrentGardenId()
@@ -348,39 +274,11 @@ export default async function Home() {
             </Link>
           </div>
         ) : (
-          <div className="space-y-8">
-            {planted.length > 0 && (
-              <section>
-                <h2
-                  className="text-xs font-medium uppercase tracking-wide mb-3"
-                  style={{ color: '#888780' }}
-                >
-                  Im Garten 🌱
-                </h2>
-                <div className="grid grid-cols-2 gap-4">
-                  {planted.map((p) => (
-                    <PlantCard key={p.id} plant={p} beds={bedsByPlant.get(p.id) ?? []} />
-                  ))}
-                </div>
-              </section>
-            )}
-
-            {interested.length > 0 && (
-              <section>
-                <h2
-                  className="text-xs font-medium uppercase tracking-wide mb-3"
-                  style={{ color: '#888780' }}
-                >
-                  Meine Samen
-                </h2>
-                <div className="grid grid-cols-2 gap-4">
-                  {interested.map((p) => (
-                    <PlantCard key={p.id} plant={p} beds={bedsByPlant.get(p.id) ?? []} />
-                  ))}
-                </div>
-              </section>
-            )}
-          </div>
+          <MyGardenSections
+            planted={planted}
+            interested={interested}
+            bedsByPlant={Object.fromEntries(bedsByPlant)}
+          />
         )}
       </div>
     </div>
