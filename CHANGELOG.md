@@ -4,6 +4,32 @@ Alle nennenswerten Änderungen an der Gartenapp, in umgekehrter chronologischer 
 
 ---
 
+## Stage 8.2 — Browse-Findability + smart Categorization + No-Overlap-AutoLayout (2026-05-03)
+
+Drei UX-Mängel aus Kim-Live-Test:
+
+- **Pflanze-fehlt-CTA an die Spitze** — `SearchFilter.tsx`: chip-style „+ Pflanze fehlt?" / „+ „<query>" anlegen" in der Filter-Zeile rechts neben dem Pflanzen-Count. Footer-CTA nur noch im Empty-State („keine Pflanzen gefunden") als Notnagel. Vorher unten unter dem Grid → Kim hat ihn nie gesehen.
+- **Smart Plant-Categorization** — Kim trug „Zitrone" als „Gemüse" ein; Gemini-Background-Enrich addierte „Obst, Baum" → Final `[Gemüse, Obst, Baum]`. Falsch.
+  - Neue Lib `lib/classifyPlantCategories.ts` — leichter Gemini-Call (Flash-Lite, ~800ms, returns nur das Category-Array). Prompt geteilt mit Backfill-Skript für Konsistenz.
+  - Server-Action `suggestCategoriesForPlant(name, latinName)` — public, called debounced (600ms) vom AddPlantForm während des Tippens.
+  - `AddPlantForm`: Live-Hint („✨ Gemini denkt: 🍎 Obst, 🌳 Baum") + Auto-Apply (solange User noch nichts manuell getoggelt hat). Bei manueller Wahl-Override bleibt Geminis Vorschlag als Hint stehen mit „Übernehmen"-Button.
+  - **Soft-Confirm-Sheet beim Submit**: wenn User-Auswahl und Gemini-Vorschlag *zero overlap* haben (Zitrone-Fall), Modal: „Du hast {Gemüse} gewählt. Gemini denkt eher {Obst, Baum}." mit zwei Buttons.
+  - `actions.ts:createPlantAndAdd`: Merge-Logik korrigiert von „immer mergen" zu „bei zero-overlap **replace**, sonst merge". Verhindert Mix-Salate. Updated auch `category` (Primary) wenn neue Primary anders ist — sonst war die Display-Pille falsch gefärbt.
+- **Overlap-aware AutoLayout für neue Beete** — `assignDefaultPositions()` (`autoLayout.ts`): aufgeteilt in 2 Pässe. Pass 1 sammelt alle bereits positionierten Bett-Boxes; Pass 2 sucht für jedes neue Bett den ersten Cascade-Slot, der mit nichts kollidiert. Wenn keiner frei: stack unter alle, mittig (`placeBelowAll`). Vorher landete jedes neue Bett im Slot-0 = top-left, *direkt überlappend* mit dem ersten existierenden Bett. Kim dachte der Add hat nicht funktioniert.
+- **Auto-Select neues Beet** — `AddBedForm` bekommt `onAdded(bedId)` Callback. EditorClient mountet AddBedForm jetzt selbst (statt Sibling auf page.tsx), wartet auf neue `views`-Prop nach revalidatePath, setzt selectedId auf die neue Bed-ID + scrollt das Inline-Detail in den Viewport. User sieht sofort dass + wo das neue Beet ist.
+
+Files:
+- `lib/classifyPlantCategories.ts` (neu)
+- `app/browse/SearchFilter.tsx` (CTA-Position)
+- `app/browse/add/AddPlantForm.tsx` (Smart-Suggestion + Soft-Confirm; controlled inputs)
+- `app/browse/add/actions.ts` (`suggestCategoriesForPlant` + Merge→Replace + primary-update)
+- `app/garten/plan/editor/autoLayout.ts` (Overlap-aware)
+- `app/garten/plan/AddBedForm.tsx` (`onAdded` Callback)
+- `app/garten/plan/editor/EditorClient.tsx` (mountet AddBedForm + auto-select)
+- `app/garten/plan/page.tsx` (AddBedForm-Sibling weg im non-empty Branch)
+
+---
+
 ## Stage 8.1 — Skizzen-Hintergründe + Small-Bed-Polish (2026-05-03)
 
 Direkt nach Stage 8: Kim wollte den Hintergrund „mehr Garten, weniger weiße Wand". Statt sofort Stage 5C (Foto-Upload pro Garten, größerer Lift) bauen wir kuratierte Themes — sechs vorgenerierte Kawaii-Hintergründe zur Auswahl, ein 🎨-Tap im Editor-Header. Foto-Upload bleibt für später geplant.

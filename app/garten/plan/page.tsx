@@ -57,17 +57,8 @@ export default async function GartenPlanPage() {
     )
   }
 
-  return (
-    <>
-      <EditorClient views={views} backgroundKey={backgroundKey} />
-      <div
-        className="px-4 pb-12"
-        style={{ backgroundColor: '#FAFAF7' }}
-      >
-        <div className="w-full max-w-md mx-auto">
-          <AddBedForm />
-        </div>
-      </div>
-    </>
-  )
+  // EditorClient now mounts AddBedForm internally (so it can wire onAdded
+  // → auto-select the new bed). The empty-state branch above keeps the
+  // standalone AddBedForm because there's no editor to mount yet.
+  return <EditorClient views={views} backgroundKey={backgroundKey} />
 }

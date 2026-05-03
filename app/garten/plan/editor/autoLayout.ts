@@ -40,18 +40,70 @@ export function effectiveShape(layout: { kind: BedKind; shape: BedShape | null }
   return layout.shape ?? kindDefaultShape(layout.kind)
 }
 
+type Box = { x: number; y: number; w: number; h: number }
+
+function rectsOverlap(a: Box, b: Box): boolean {
+  return !(
+    a.x + a.w <= b.x ||
+    b.x + b.w <= a.x ||
+    a.y + a.h <= b.y ||
+    b.y + b.h <= a.y
+  )
+}
+
+function findCascadeSlot(
+  occupied: Box[],
+  w: number,
+  h: number
+): { x: number; y: number } | null {
+  // Try cascade slots in row-major order, take the first that doesn't overlap.
+  // 2 cols × N rows; bound by canvas height.
+  const maxRows = Math.floor(
+    (CANVAS_H - CASCADE.marginY) / (CASCADE.cellH + CASCADE.gapY)
+  ) + 1
+  for (let i = 0; i < maxRows * CASCADE.cols; i++) {
+    const row = Math.floor(i / CASCADE.cols)
+    const col = i % CASCADE.cols
+    const x = CASCADE.marginX + col * (CASCADE.cellW + CASCADE.gapX)
+    const y = CASCADE.marginY + row * (CASCADE.cellH + CASCADE.gapY)
+    if (x + w > CANVAS_W || y + h > CANVAS_H) continue
+    const candidate = { x, y, w, h }
+    if (occupied.every((o) => !rectsOverlap(candidate, o))) {
+      return { x, y }
+    }
+  }
+  return null
+}
+
+function placeBelowAll(
+  occupied: Box[],
+  w: number,
+  h: number
+): { x: number; y: number } {
+  // Fallback: stack below the lowest existing bed, centered horizontally.
+  const lowest = occupied.reduce((max, o) => Math.max(max, o.y + o.h), 0)
+  const y = Math.min(CANVAS_H - h, lowest + 20)
+  const x = Math.max(0, Math.min(CANVAS_W - w, (CANVAS_W - w) / 2))
+  return { x, y }
+}
+
 /**
  * Hydrates `Bed` rows into editor-ready layouts. Beds with NULL coords are
- * placed in a 2-column cascade (insertion order = created_at). Round kinds
- * (topf, kuebel) get a square default so the ellipse renders as a circle.
+ * placed via overlap-aware cascade (Stage 8.2 fix): we collect all already-
+ * positioned beds first, then for each new bed try cascade slots in order,
+ * skipping any that would collide. If no slot fits, stack the new bed below
+ * everything centered. Round kinds (topf, kuebel) get a square default so
+ * the ellipse renders as a circle.
  */
 export function assignDefaultPositions(beds: Bed[]): BedLayout[] {
-  let cascadeIndex = 0
-  return beds.map((b) => {
+  // Pass 1 — separate beds with vs without coords
+  const withCoords: BedLayout[] = []
+  const withoutCoords: Bed[] = []
+  for (const b of beds) {
     const hasCoords =
       b.x !== null && b.y !== null && b.w !== null && b.h !== null
     if (hasCoords) {
-      return {
+      withCoords.push({
         id: b.id,
         label: b.label,
         kind: b.kind,
@@ -62,29 +114,46 @@ export function assignDefaultPositions(beds: Bed[]): BedLayout[] {
         shape: b.shape ?? null,
         rotation: b.rotation ?? 0,
         autoLaid: false,
-      }
+      })
+    } else {
+      withoutCoords.push(b)
     }
-    const i = cascadeIndex++
-    const row = Math.floor(i / CASCADE.cols)
-    const col = i % CASCADE.cols
-    const x = CASCADE.marginX + col * (CASCADE.cellW + CASCADE.gapX)
-    const y = CASCADE.marginY + row * (CASCADE.cellH + CASCADE.gapY)
+  }
+
+  // Pass 2 — place each unpositioned bed where it doesn't collide
+  const occupied: Box[] = withCoords.map((l) => ({
+    x: l.x,
+    y: l.y,
+    w: l.w,
+    h: l.h,
+  }))
+  const newlyPlaced: BedLayout[] = []
+  for (const b of withoutCoords) {
     const round = (b.shape ?? kindDefaultShape(b.kind)) === 'ellipse'
     const w = round ? Math.min(CASCADE.cellW, CASCADE.cellH) : CASCADE.cellW
     const h = round ? Math.min(CASCADE.cellW, CASCADE.cellH) : CASCADE.cellH
-    return {
+    const slot =
+      findCascadeSlot(occupied, w, h) ?? placeBelowAll(occupied, w, h)
+    occupied.push({ x: slot.x, y: slot.y, w, h })
+    newlyPlaced.push({
       id: b.id,
       label: b.label,
       kind: b.kind,
-      x,
-      y,
+      x: slot.x,
+      y: slot.y,
       w,
       h,
       shape: b.shape ?? null,
       rotation: b.rotation ?? 0,
       autoLaid: true,
-    }
-  })
+    })
+  }
+
+  // Preserve original beds order so the canvas/inline-detail listings line up.
+  const byId = new Map<string, BedLayout>(
+    [...withCoords, ...newlyPlaced].map((l) => [l.id, l])
+  )
+  return beds.map((b) => byId.get(b.id)!).filter(Boolean)
 }
 
 export function clampToCanvas(

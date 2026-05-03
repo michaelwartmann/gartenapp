@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState, useTransition } from 'react'
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -16,6 +16,7 @@ import {
 import BedInlineView from './BedInlineView'
 import type { ThumbPlanting } from './PlantThumbnails'
 import BackgroundPicker from '../BackgroundPicker'
+import AddBedForm from '../AddBedForm'
 
 const BedCanvas = dynamic(() => import('./BedCanvas'), {
   ssr: false,
@@ -51,6 +52,8 @@ export default function EditorClient({ views, backgroundKey }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [locked, setLocked] = useState<boolean>(true)
   const [showBackgroundPicker, setShowBackgroundPicker] = useState(false)
+  const [pendingNewBedId, setPendingNewBedId] = useState<string | null>(null)
+  const inlineDetailRef = useRef<HTMLDivElement | null>(null)
 
   // If beds prop changes (e.g. after add/delete via router.refresh),
   // re-seed layouts so canvas stays in sync. Drops in-flight unsaved drag.
@@ -58,6 +61,24 @@ export default function EditorClient({ views, backgroundKey }: Props) {
     setLayouts(initial)
     setDirty(initial.some((l) => l.autoLaid))
   }, [initial])
+
+  // Stage 8.2 — after AddBedForm creates a new bed, the page revalidates and
+  // `views` arrives with the new bed in it. Auto-select it so the user sees
+  // it on the sketch + in the inline detail (not lost in the cascade).
+  useEffect(() => {
+    if (!pendingNewBedId) return
+    const exists = views.some((v) => v.bed.id === pendingNewBedId)
+    if (!exists) return
+    setSelectedId(pendingNewBedId)
+    setLocked(true)
+    setPendingNewBedId(null)
+    requestAnimationFrame(() => {
+      inlineDetailRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+      })
+    })
+  }, [views, pendingNewBedId])
 
   // Build bedId → ThumbPlanting[] for the canvas (this season's plantings).
   // Greyed if not yet planted (planted_at NULL) or harvested.
@@ -307,7 +328,7 @@ export default function EditorClient({ views, backgroundKey }: Props) {
         )}
 
         {locked && selectedView && (
-          <div className="mt-3">
+          <div className="mt-3" ref={inlineDetailRef}>
             <BedInlineView
               key={selectedView.bed.id}
               view={selectedView}
@@ -320,6 +341,12 @@ export default function EditorClient({ views, backgroundKey }: Props) {
           <p className="text-xs mt-3 text-center" style={{ color: '#888780' }}>
             Tipp ein Beet an, um zu sehen, was darin steht.
           </p>
+        )}
+
+        {locked && (
+          <div className="mt-6">
+            <AddBedForm onAdded={(bedId) => setPendingNewBedId(bedId)} />
+          </div>
         )}
       </div>
 

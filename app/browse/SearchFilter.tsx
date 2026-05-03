@@ -118,9 +118,28 @@ export default function SearchFilter({ plants, inGardenIds }: Props) {
             )
           })}
         </div>
-        <p className="text-xs" style={{ color: '#888780' }}>
-          {filtered.length} {filtered.length === 1 ? 'Pflanze' : 'Pflanzen'}
-        </p>
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs" style={{ color: '#888780' }}>
+            {filtered.length} {filtered.length === 1 ? 'Pflanze' : 'Pflanzen'}
+          </p>
+          <Link
+            href={
+              query.trim()
+                ? `/browse/add?name=${encodeURIComponent(query.trim())}`
+                : '/browse/add'
+            }
+            className="text-xs font-medium px-3 py-1.5 rounded-full border touch-manipulation whitespace-nowrap"
+            style={{
+              color: '#4A7C59',
+              borderColor: '#C9DCC9',
+              backgroundColor: '#F0F5F0',
+            }}
+          >
+            {query.trim()
+              ? `+ „${query.trim()}" anlegen`
+              : '+ Pflanze fehlt?'}
+          </Link>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-4">
@@ -181,26 +200,23 @@ export default function SearchFilter({ plants, inGardenIds }: Props) {
       </div>
 
       {filtered.length === 0 && (
-        <div className="text-center py-8" style={{ color: '#888780' }}>
+        <div className="text-center py-8 space-y-3" style={{ color: '#888780' }}>
           <p className="text-base">Keine Pflanzen gefunden.</p>
+          <Link
+            href={
+              query.trim()
+                ? `/browse/add?name=${encodeURIComponent(query.trim())}`
+                : '/browse/add'
+            }
+            className="inline-block px-4 py-3 rounded-xl border-2 border-dashed text-sm font-medium"
+            style={{ borderColor: '#C8C5BA', color: '#4A7C59' }}
+          >
+            {query.trim()
+              ? `„${query.trim()}" selbst hinzufügen →`
+              : '+ Pflanze selbst hinzufügen'}
+          </Link>
         </div>
       )}
-
-      <div className="mt-6">
-        <Link
-          href={
-            query.trim()
-              ? `/browse/add?name=${encodeURIComponent(query.trim())}`
-              : '/browse/add'
-          }
-          className="block w-full text-center py-4 rounded-xl border-2 border-dashed text-sm font-medium"
-          style={{ borderColor: '#C8C5BA', color: '#4A7C59' }}
-        >
-          {filtered.length === 0 && query.trim()
-            ? `„${query.trim()}" selbst hinzufügen →`
-            : '+ Pflanze fehlt? Selbst hinzufügen'}
-        </Link>
-      </div>
     </div>
   )
 }
