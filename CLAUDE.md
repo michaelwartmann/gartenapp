@@ -235,6 +235,7 @@ Stages shipped on top of v1.0 — siehe `CHANGELOG.md` für Details:
 - ✅ **Stage 11** (2026-05-03): Editor-Polish — „✕ Verwerfen"-Knopf in den Edit-Mode-Header gehoben (gleichwertig zu Save), „➕ Beet"-Knopf im Lock-Mode-Header öffnet `AddBedSheet` (Bottom-Sheet statt permanent inline). BackgroundPicker-Tiles zeigen Theme + Opazität + Schatten-Beete overlaid (`ShadowBeds`-Helper) — Live-Preview matchend mit dem Canvas-Render.
 - ✅ **Stage 12** (2026-05-03): Catalog-Filter erweitert — collapsible Smart-Filter-Panel auf `/browse` mit 5 Achsen (Saatzeit/Erntezeit Monats-Picker, Lebenszyklus/Zehrertyp/Standort Pill-Trios), active-Filter-Chips mit ✕, AND-Kombination. Substring-Match auf den strukturierten Plant-Feldern, client-seitig, kein Schema.
 - ✅ **Stage 13** (2026-05-03): Beet-Tagebuch — Foto-Verlauf pro Beet mit Datum (`bed_photos`-Tabelle, Storage-Bucket `bed-photos`). Inline-Strip in `BedInlineView` (horizontal scrollbar, Thumb + Datum), Upload-Sheet (mit Live-Preview + Datum-Editor, Compression auf 1024 px WebP), Fullscreen-Viewer (Vor/Zurück + Löschen mit Confirm). `lib/imageCompression.ts` aus Stage 5C extrahiert + von beiden Upload-Pfaden geteilt.
+- ✅ **Stage 12.1** (2026-05-03): Filter auch auf Mein-Garten-Home — Stage-12-Filter-Logik extrahiert in `lib/plantFilters.ts` + UI-Panel in `app/PlantFilterPanel.tsx`, neue `MyGardenSections`-Client-Komponente mountet Filter über den beiden Sections (Im Garten + Meine Samen), Filter wirken unabhängig pro Sektion mit `gefiltert/total`-Counter.
 
 Next up:
 
