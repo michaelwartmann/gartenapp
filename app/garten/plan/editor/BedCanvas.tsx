@@ -14,13 +14,19 @@ import {
   normalizeRotation,
   type BedLayout,
 } from './autoLayout'
+import PlantThumbnails, { type ThumbPlanting } from './PlantThumbnails'
 
 type Props = {
   beds: BedLayout[]
   onChange: (next: BedLayout[]) => void
+  /** Called when user taps a selected bed in unlocked mode (e.g. open EditBedSheet). */
   onTapBed: (bedId: string) => void
   selectedId: string | null
   onSelect: (id: string | null) => void
+  /** When true (default for plan view): no drag, no resize, single tap selects. */
+  locked?: boolean
+  /** Map bedId → plantings to render as thumbnails on the bed. */
+  bedPlantings?: Map<string, ThumbPlanting[]>
 }
 
 const BED_FILL: Record<BedKind, string> = {
@@ -43,6 +49,8 @@ export default function BedCanvas({
   onTapBed,
   selectedId,
   onSelect,
+  locked = false,
+  bedPlantings,
 }: Props) {
   const transformerRef = useRef<Konva.Transformer | null>(null)
   const groupRefs = useRef<Map<string, Konva.Group>>(new Map())
@@ -64,11 +72,11 @@ export default function BedCanvas({
     return () => window.removeEventListener('resize', recompute)
   }, [])
 
-  // Wire transformer to selected node
+  // Wire transformer to selected node (only mounted in unlocked mode)
   useEffect(() => {
     const tr = transformerRef.current
     if (!tr) return
-    if (!selectedId) {
+    if (locked || !selectedId) {
       tr.nodes([])
       tr.getLayer()?.batchDraw()
       return
@@ -80,7 +88,7 @@ export default function BedCanvas({
     } else {
       tr.nodes([])
     }
-  }, [selectedId, beds])
+  }, [selectedId, beds, locked])
 
   function patchBed(id: string, patch: Partial<BedLayout>) {
     onChange(
@@ -94,7 +102,11 @@ export default function BedCanvas({
   }
 
   return (
-    <div ref={wrapperRef} className="w-full" style={{ touchAction: 'none' }}>
+    <div
+      ref={wrapperRef}
+      className="w-full"
+      style={{ touchAction: locked ? 'manipulation' : 'none' }}
+    >
       <Stage
         ref={(node) => {
           stageRef.current = node
@@ -120,6 +132,8 @@ export default function BedCanvas({
           {beds.map((bed) => {
             const shape = effectiveShape(bed)
             const isSel = bed.id === selectedId
+            const thumbs = bedPlantings?.get(bed.id) ?? []
+            const hasThumbs = thumbs.length > 0
             return (
               <Group
                 key={bed.id}
@@ -130,7 +144,7 @@ export default function BedCanvas({
                 x={bed.x}
                 y={bed.y}
                 rotation={bed.rotation}
-                draggable
+                draggable={!locked}
                 dragDistance={4}
                 dragBoundFunc={(pos) => {
                   // pos is in stage (scaled) coords; convert via scale.
@@ -149,14 +163,18 @@ export default function BedCanvas({
                   patchBed(bed.id, { x: e.target.x(), y: e.target.y() })
                 }}
                 onClick={() => {
-                  if (selectedId === bed.id) {
+                  if (locked) {
+                    onSelect(bed.id)
+                  } else if (selectedId === bed.id) {
                     onTapBed(bed.id)
                   } else {
                     onSelect(bed.id)
                   }
                 }}
                 onTap={() => {
-                  if (selectedId === bed.id) {
+                  if (locked) {
+                    onSelect(bed.id)
+                  } else if (selectedId === bed.id) {
                     onTapBed(bed.id)
                   } else {
                     onSelect(bed.id)
@@ -207,40 +225,63 @@ export default function BedCanvas({
                   y={6}
                   fontSize={18}
                 />
-                <Text
-                  text={bed.label}
-                  x={0}
-                  y={bed.h / 2 - 8}
-                  width={bed.w}
-                  align="center"
-                  fontSize={14}
-                  fontStyle="500"
-                  fill="#2C2C2A"
-                />
+                {hasThumbs ? (
+                  <>
+                    <Text
+                      text={bed.label}
+                      x={32}
+                      y={10}
+                      width={bed.w - 40}
+                      ellipsis
+                      wrap="none"
+                      fontSize={13}
+                      fontStyle="500"
+                      fill="#2C2C2A"
+                    />
+                    <PlantThumbnails
+                      bedW={bed.w}
+                      bedH={bed.h}
+                      plantings={thumbs}
+                    />
+                  </>
+                ) : (
+                  <Text
+                    text={bed.label}
+                    x={0}
+                    y={bed.h / 2 - 8}
+                    width={bed.w}
+                    align="center"
+                    fontSize={14}
+                    fontStyle="500"
+                    fill="#2C2C2A"
+                  />
+                )}
               </Group>
             )
           })}
-          <Transformer
-            ref={(node) => {
-              transformerRef.current = node
-            }}
-            enabledAnchors={['bottom-right']}
-            rotateEnabled
-            rotateAnchorOffset={28}
-            anchorSize={22}
-            anchorCornerRadius={4}
-            anchorStroke={BED_STROKE_SELECTED}
-            anchorFill="#FFFFFF"
-            borderStroke={BED_STROKE_SELECTED}
-            borderDash={[4, 4]}
-            boundBoxFunc={(oldBox, newBox) => {
-              if (newBox.width < MIN_BED || newBox.height < MIN_BED) return oldBox
-              if (newBox.x < 0 || newBox.y < 0) return oldBox
-              if (newBox.x + newBox.width > CANVAS_W * scale) return oldBox
-              if (newBox.y + newBox.height > CANVAS_H * scale) return oldBox
-              return newBox
-            }}
-          />
+          {!locked && (
+            <Transformer
+              ref={(node) => {
+                transformerRef.current = node
+              }}
+              enabledAnchors={['bottom-right']}
+              rotateEnabled
+              rotateAnchorOffset={28}
+              anchorSize={22}
+              anchorCornerRadius={4}
+              anchorStroke={BED_STROKE_SELECTED}
+              anchorFill="#FFFFFF"
+              borderStroke={BED_STROKE_SELECTED}
+              borderDash={[4, 4]}
+              boundBoxFunc={(oldBox, newBox) => {
+                if (newBox.width < MIN_BED || newBox.height < MIN_BED) return oldBox
+                if (newBox.x < 0 || newBox.y < 0) return oldBox
+                if (newBox.x + newBox.width > CANVAS_W * scale) return oldBox
+                if (newBox.y + newBox.height > CANVAS_H * scale) return oldBox
+                return newBox
+              }}
+            />
+          )}
         </Layer>
       </Stage>
     </div>
