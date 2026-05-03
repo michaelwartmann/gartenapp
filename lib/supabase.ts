@@ -99,6 +99,8 @@ export type Garden = {
   created_at: string
   weekly_tasks_cache: unknown
   weekly_tasks_cache_date: string | null
+  /** Stage 8.1 — curated Skizzen-Hintergrund. NULL = Standard (off-white). */
+  background_key: string | null
 }
 
 export type GardenPlant = {

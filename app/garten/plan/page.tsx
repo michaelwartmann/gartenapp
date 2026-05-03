@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getCurrentGardenId } from '@/lib/currentGarden'
-import { listBedsForGarden } from './actions'
+import { listBedsForGarden, getGardenBackgroundKey } from './actions'
 import EditorClient from './editor/EditorClient'
 import AddBedForm from './AddBedForm'
 
@@ -11,7 +11,10 @@ export default async function GartenPlanPage() {
   const gardenId = await getCurrentGardenId()
   if (!gardenId) redirect('/login')
 
-  const views = await listBedsForGarden()
+  const [views, backgroundKey] = await Promise.all([
+    listBedsForGarden(),
+    getGardenBackgroundKey(),
+  ])
 
   if (views.length === 0) {
     return (
@@ -56,7 +59,7 @@ export default async function GartenPlanPage() {
 
   return (
     <>
-      <EditorClient views={views} />
+      <EditorClient views={views} backgroundKey={backgroundKey} />
       <div
         className="px-4 pb-12"
         style={{ backgroundColor: '#FAFAF7' }}

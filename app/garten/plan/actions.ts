@@ -11,6 +11,7 @@ import {
 } from '@/lib/recommendRotation'
 import type { Bed, BedKind, BedShape, Plant } from '@/lib/supabase'
 import { VALID_BED_KINDS } from '@/lib/bedKinds'
+import { isValidBackgroundKey } from '@/lib/canvasBackgrounds'
 
 const VALID_BED_SHAPES: BedShape[] = ['rect', 'ellipse']
 
@@ -878,3 +879,50 @@ export async function listBedsContainingPlant(
   }
   return out
 }
+
+// ─────────────────────────────────────────────────────────────────────────
+// Stage 8.1 — Skizzen-Hintergrund (curated themes, per-garden)
+// ─────────────────────────────────────────────────────────────────────────
+
+export async function getGardenBackgroundKey(): Promise<string | null> {
+  const gardenId = await getCurrentGardenId()
+  if (!gardenId) return null
+  const supabase = adminClient()
+  const { data, error } = await supabase
+    .from('gardens')
+    .select('background_key')
+    .eq('id', gardenId)
+    .single()
+  if (error || !data) return null
+  return (data as { background_key: string | null }).background_key
+}
+
+export type SetBackgroundResult =
+  | { ok: true }
+  | { error: 'no-garden' | 'invalid' | 'server' }
+
+export async function setGardenBackground(
+  key: string | null
+): Promise<SetBackgroundResult> {
+  const gardenId = await getCurrentGardenId()
+  if (!gardenId) return { error: 'no-garden' }
+  let stored: string | null = null
+  if (key !== null) {
+    if (typeof key !== 'string') return { error: 'invalid' }
+    if (!isValidBackgroundKey(key)) return { error: 'invalid' }
+    // 'default' is the no-image option; persist as NULL so the column reflects it.
+    stored = key === 'default' ? null : key
+  }
+  const supabase = adminClient()
+  const { error } = await supabase
+    .from('gardens')
+    .update({ background_key: stored })
+    .eq('id', gardenId)
+  if (error) {
+    console.error('setGardenBackground failed:', error)
+    return { error: 'server' }
+  }
+  revalidatePath('/garten/plan')
+  return { ok: true }
+}
+

@@ -4,6 +4,32 @@ Alle nennenswerten Änderungen an der Gartenapp, in umgekehrter chronologischer 
 
 ---
 
+## Stage 8.1 — Skizzen-Hintergründe + Small-Bed-Polish (2026-05-03)
+
+Direkt nach Stage 8: Kim wollte den Hintergrund „mehr Garten, weniger weiße Wand". Statt sofort Stage 5C (Foto-Upload pro Garten, größerer Lift) bauen wir kuratierte Themes — sechs vorgenerierte Kawaii-Hintergründe zur Auswahl, ein 🎨-Tap im Editor-Header. Foto-Upload bleibt für später geplant.
+
+- **6 generierte WebP-Hintergründe** (`public/garten-bg/{erde,wiese,holz,aquarell,stein,botanik}.webp`) — generiert via `npm run generate-backgrounds` (Gemini Flash-Image), zu 768 px @ q78 WebP komprimiert, total **216 KB** (von 9 MB ungeshrunken). Kawaii-Stil konsistent mit den Pflanzen-Illus.
+- **Per-Garten persistiert** — `gardens.background_key TEXT` mit Length-Constraint, NULL = Standard-Off-White.
+- **Picker als Bottom-Sheet** (`BackgroundPicker.tsx`) — 2-spaltig im 2:3-Format, Live-Vorschau jedes Themes als Thumbnail, ✓ markiert das aktive. Hint „Eigenes Foto kommt später".
+- **`<KonvaImage>`-Layer** (`CanvasBackground.tsx`) als unterster Layer im BedCanvas, cover-fit, individuelle Opazität pro Theme (0.35–0.55) damit Beete lesbar bleiben.
+- **🎨-Button im Editor-Header** (locked-Mode neben ✏️). Im Edit-Mode versteckt damit Save-Button alleine prominent ist.
+- **Single source of truth** — `lib/canvasBackgrounds.ts` definiert Keys + Pfade + Labels + Opazität + Validator. `setGardenBackground`-Action validiert über `isValidBackgroundKey`, persistiert NULL für `'default'`.
+- **Small-Bed-Lesbarkeits-Fix** — neuer `BedLabelStack`-Helper im BedCanvas: Kind-Icon wird auf Beeten < 70 px ausgeblendet, Label-Font shrinkt von 14 → 12 → 10 px je nach Größe, sehr kleine Beete (< 50×36) zeigen nur die ersten 2 Buchstaben (vollständiger Inhalt im Inline-Detail unten). Vorher: Icon + Label überlappten / verschwanden bei kleinen Beeten.
+
+Files:
+- `notes/stage-8_1-schema.sql` (neu) — Schema-Migration
+- `scripts/generate-backgrounds.ts` (neu) — One-time Generator, idempotent + `--force`/`--only=KEY`
+- `lib/canvasBackgrounds.ts` (neu) — Single source of truth
+- `lib/supabase.ts` (Garden-Type +`background_key`)
+- `app/garten/plan/actions.ts` (`setGardenBackground` + `getGardenBackgroundKey`)
+- `app/garten/plan/BackgroundPicker.tsx` (neu)
+- `app/garten/plan/editor/{CanvasBackground,BedCanvas,EditorClient}.tsx`
+- `app/garten/plan/page.tsx` (lädt + reicht backgroundKey durch)
+- `public/garten-bg/*.webp` (6 Bilder, 216 KB total)
+- `package.json` (`generate-backgrounds` script)
+
+---
+
 ## Stage 8 — Plan-Page Polish: Lock + Inline-Detail + Pflanzen-Thumbs (2026-05-03)
 
 Drei Brainstorm-Ideen aus Kim-Feedback in einem Push: die Skizze sollte „lockable" sein, beim Tappen eines Beets sollte der Beet-Inhalt sofort sichtbar werden, und die Beete sollten ihre Pflanzen visuell zeigen — nicht nur Farbe + Label.

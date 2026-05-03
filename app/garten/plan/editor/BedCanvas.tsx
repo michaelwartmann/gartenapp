@@ -15,6 +15,7 @@ import {
   type BedLayout,
 } from './autoLayout'
 import PlantThumbnails, { type ThumbPlanting } from './PlantThumbnails'
+import CanvasBackground from './CanvasBackground'
 
 type Props = {
   beds: BedLayout[]
@@ -27,6 +28,8 @@ type Props = {
   locked?: boolean
   /** Map bedId → plantings to render as thumbnails on the bed. */
   bedPlantings?: Map<string, ThumbPlanting[]>
+  /** Stored garden background key (NULL → no theme). */
+  backgroundKey?: string | null
 }
 
 const BED_FILL: Record<BedKind, string> = {
@@ -43,6 +46,103 @@ const BED_FILL: Record<BedKind, string> = {
 const BED_STROKE = '#4A7C59'
 const BED_STROKE_SELECTED = '#C17B5C'
 
+/**
+ * Size-adaptive label + kind-icon rendering. Small beds get a smaller
+ * font and drop the icon entirely so the label still reads. Tiny beds
+ * (≤ ~50 px on either side) fall back to a single character so something
+ * shows; the inline detail below the canvas carries the full label.
+ */
+function BedLabelStack({
+  bed,
+  hasThumbs,
+  thumbs,
+}: {
+  bed: BedLayout
+  hasThumbs: boolean
+  thumbs: ThumbPlanting[]
+}) {
+  const minSide = Math.min(bed.w, bed.h)
+  // Hide the kind icon on small beds — it eats space the label needs.
+  const showIcon = minSide >= 70
+  // Drop label font size as bed shrinks.
+  const labelFs = minSide < 60 ? 10 : minSide < 90 ? 12 : 14
+  // Use the planting count as a quick visual hint when label is tiny.
+  const tooSmallForLabel = bed.w < 50 || bed.h < 36
+
+  if (tooSmallForLabel) {
+    // Just a tiny indicator — full label sits in the inline detail below
+    return (
+      <Text
+        text={bed.label.slice(0, 2)}
+        x={0}
+        y={bed.h / 2 - 6}
+        width={bed.w}
+        align="center"
+        fontSize={10}
+        fontStyle="600"
+        fill="#888780"
+      />
+    )
+  }
+
+  if (hasThumbs) {
+    // Label at top (next to icon if room), thumbs render below in a sibling node
+    const labelX = showIcon ? 32 : 6
+    const labelW = showIcon ? bed.w - 40 : bed.w - 12
+    return (
+      <>
+        {showIcon && (
+          <Text
+            text={bedKindIcon(bed.kind)}
+            x={8}
+            y={6}
+            fontSize={18}
+            listening={false}
+          />
+        )}
+        <Text
+          text={bed.label}
+          x={labelX}
+          y={showIcon ? 10 : 8}
+          width={labelW}
+          ellipsis
+          wrap="none"
+          fontSize={Math.min(13, labelFs)}
+          fontStyle="500"
+          fill="#2C2C2A"
+        />
+      </>
+    )
+  }
+
+  // No thumbs — center the label vertically; icon top-left if there's room
+  return (
+    <>
+      {showIcon && (
+        <Text
+          text={bedKindIcon(bed.kind)}
+          x={8}
+          y={6}
+          fontSize={18}
+          listening={false}
+        />
+      )}
+      <Text
+        text={bed.label}
+        x={0}
+        y={bed.h / 2 - labelFs / 2 - 1}
+        width={bed.w}
+        align="center"
+        ellipsis
+        wrap="none"
+        fontSize={labelFs}
+        fontStyle="500"
+        fill="#2C2C2A"
+      />
+    </>
+  )
+}
+
 export default function BedCanvas({
   beds,
   onChange,
@@ -51,6 +151,7 @@ export default function BedCanvas({
   onSelect,
   locked = false,
   bedPlantings,
+  backgroundKey = null,
 }: Props) {
   const transformerRef = useRef<Konva.Transformer | null>(null)
   const groupRefs = useRef<Map<string, Konva.Group>>(new Map())
@@ -123,11 +224,14 @@ export default function BedCanvas({
           if (e.target === e.target.getStage()) onSelect(null)
         }}
         style={{
-          backgroundColor: '#FAFAF7',
           border: '1px solid #E8E6DF',
           borderRadius: 12,
+          overflow: 'hidden',
         }}
       >
+        <Layer listening={false}>
+          <CanvasBackground backgroundKey={backgroundKey} />
+        </Layer>
         <Layer>
           {beds.map((bed) => {
             const shape = effectiveShape(bed)
@@ -219,41 +323,16 @@ export default function BedCanvas({
                     cornerRadius={8}
                   />
                 )}
-                <Text
-                  text={bedKindIcon(bed.kind)}
-                  x={8}
-                  y={6}
-                  fontSize={18}
+                <BedLabelStack
+                  bed={bed}
+                  hasThumbs={hasThumbs}
+                  thumbs={thumbs}
                 />
-                {hasThumbs ? (
-                  <>
-                    <Text
-                      text={bed.label}
-                      x={32}
-                      y={10}
-                      width={bed.w - 40}
-                      ellipsis
-                      wrap="none"
-                      fontSize={13}
-                      fontStyle="500"
-                      fill="#2C2C2A"
-                    />
-                    <PlantThumbnails
-                      bedW={bed.w}
-                      bedH={bed.h}
-                      plantings={thumbs}
-                    />
-                  </>
-                ) : (
-                  <Text
-                    text={bed.label}
-                    x={0}
-                    y={bed.h / 2 - 8}
-                    width={bed.w}
-                    align="center"
-                    fontSize={14}
-                    fontStyle="500"
-                    fill="#2C2C2A"
+                {hasThumbs && (
+                  <PlantThumbnails
+                    bedW={bed.w}
+                    bedH={bed.h}
+                    plantings={thumbs}
                   />
                 )}
               </Group>

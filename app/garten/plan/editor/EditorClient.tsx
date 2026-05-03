@@ -15,6 +15,7 @@ import {
 } from './autoLayout'
 import BedInlineView from './BedInlineView'
 import type { ThumbPlanting } from './PlantThumbnails'
+import BackgroundPicker from '../BackgroundPicker'
 
 const BedCanvas = dynamic(() => import('./BedCanvas'), {
   ssr: false,
@@ -35,9 +36,10 @@ const BedCanvas = dynamic(() => import('./BedCanvas'), {
 
 type Props = {
   views: BedView[]
+  backgroundKey: string | null
 }
 
-export default function EditorClient({ views }: Props) {
+export default function EditorClient({ views, backgroundKey }: Props) {
   const router = useRouter()
   const beds = useMemo(() => views.map((v) => v.bed), [views])
   const initial = useMemo(() => assignDefaultPositions(beds), [beds])
@@ -48,6 +50,7 @@ export default function EditorClient({ views }: Props) {
   const [savedFlash, setSavedFlash] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [locked, setLocked] = useState<boolean>(true)
+  const [showBackgroundPicker, setShowBackgroundPicker] = useState(false)
 
   // If beds prop changes (e.g. after add/delete via router.refresh),
   // re-seed layouts so canvas stays in sync. Drops in-flight unsaved drag.
@@ -185,18 +188,33 @@ export default function EditorClient({ views }: Props) {
             Garten-Plan
           </h1>
           {locked ? (
-            <button
-              onClick={handleToggleLock}
-              className="px-3 py-2 rounded-lg text-sm font-medium touch-manipulation shrink-0 min-h-[40px] border"
-              style={{
-                color: '#4A7C59',
-                backgroundColor: '#F0F5F0',
-                borderColor: '#C9DCC9',
-              }}
-              aria-label="Skizze bearbeiten"
-            >
-              ✏️ Bearbeiten
-            </button>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                onClick={() => setShowBackgroundPicker(true)}
+                className="px-2 py-2 rounded-lg text-base touch-manipulation min-h-[40px] border"
+                style={{
+                  color: '#4A7C59',
+                  backgroundColor: '#FFFFFF',
+                  borderColor: '#E8E6DF',
+                }}
+                aria-label="Hintergrund wählen"
+                title="Hintergrund"
+              >
+                🎨
+              </button>
+              <button
+                onClick={handleToggleLock}
+                className="px-3 py-2 rounded-lg text-sm font-medium touch-manipulation min-h-[40px] border"
+                style={{
+                  color: '#4A7C59',
+                  backgroundColor: '#F0F5F0',
+                  borderColor: '#C9DCC9',
+                }}
+                aria-label="Skizze bearbeiten"
+              >
+                ✏️
+              </button>
+            </div>
           ) : (
             <button
               onClick={handleSave}
@@ -272,6 +290,7 @@ export default function EditorClient({ views }: Props) {
           onSelect={setSelectedId}
           locked={locked}
           bedPlantings={bedPlantings}
+          backgroundKey={backgroundKey}
         />
 
         {!locked && dirty && (
@@ -303,6 +322,13 @@ export default function EditorClient({ views }: Props) {
           </p>
         )}
       </div>
+
+      {showBackgroundPicker && (
+        <BackgroundPicker
+          currentKey={backgroundKey}
+          onClose={() => setShowBackgroundPicker(false)}
+        />
+      )}
     </div>
   )
 }
